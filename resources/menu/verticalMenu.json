@@ -1,0 +1,45 @@
+{
+  "menu": [
+    {
+      "url": "/",
+      "name": "Dashboards",
+      "icon": "menu-icon tf-icons bx bx-home-circle",
+      "slug": "dashboard",
+      "submenu": [
+        {
+          "url": "/",
+          "name": "Analytics",
+          "slug": "dashboard-analytics"
+        }
+      ]
+    },
+    {
+      "url": "oltmonitor/view",
+      "name": "Olt Monitor",
+      "icon": "menu-icon tf-icons bx bx-collection",
+      "slug": "view-olt"
+    },
+    {
+      "name": "Account Settings",
+      "icon": "menu-icon tf-icons bx bx bx-dock-top",
+      "slug": "pages-account-settings",
+      "submenu": [
+        {
+          "url": "pages/account-settings-account",
+          "name": "Account",
+          "slug": "pages-account-settings-account"
+        },
+        {
+          "url": "pages/account-settings-notifications",
+          "name": "Notifications",
+          "slug": "pages-account-settings-notifications"
+        },
+        {
+          "url": "pages/account-settings-connections",
+          "name": "Connections",
+          "slug": "pages-account-settings-connections"
+        }
+      ]
+    }
+  ]
+}
