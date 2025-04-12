@@ -60,6 +60,8 @@ class Olt extends Controller
     // Tangkap data dari request
     $oid = $request->input('oid'); // atau $request->oid
     $pop = $request->input(key: 'pop');
+    $cause = $request->input(key: 'cause');
+    $desc = $request->input(key: 'desc');
 
     // Debugging: Cek apakah OID diterima
     if (!$oid) {
@@ -78,6 +80,29 @@ class Olt extends Controller
       if ($onurx < -50 || $onurx > 50) {
           $onurx = 'No Signal';
       }
+      $rawofflineCause = snmp2_get('10.100.11.3', 'tridatunet', $cause, '100000000000', 10);
+      $offlineCause = preg_replace('/[^0-9\-.]/', '', trim($rawofflineCause));
+
+      // Mapping angka ke nama
+      $causeMap = [
+        1  => 'unknown',
+        2  => 'LOS',
+        3  => 'LOSi',
+        4  => 'LOFi',
+        5  => 'sfi',
+        6  => 'loai',
+        7  => 'loami',
+        8  => 'AuthFail',
+        9  => 'PowerOff',
+        10 => 'deactiveSucc',
+        11 => 'deactiveFail',
+        12 => 'Reboot',
+        13 => 'Shutdown',
+      ];
+
+      // Ambil nama cause
+      $causeText = isset($causeMap[(int)$offlineCause]) ? $causeMap[(int)$offlineCause] : 'Unknown';
+
     } else {
       $rawonurx = snmp2_get('10.100.12.3', 'tridatunet', $oid, '100000000000', 10);
       // ✅ Hapus teks "INTEGER: " dari hasil SNMP
@@ -87,11 +112,35 @@ class Olt extends Controller
       if ($onurx < -50 || $onurx > 50) {
         $onurx = 'No Signal';
       }
+      $rawofflineCause = snmp2_get('10.100.12.3', 'tridatunet', $cause, '100000000000', 10);
+      $offlineCause = preg_replace('/[^0-9\-.]/', '', trim($rawofflineCause));
+
+      // Mapping angka ke nama
+      $causeMap = [
+        1  => 'unknown',
+        2  => 'LOS',
+        3  => 'LOSi',
+        4  => 'LOFi',
+        5  => 'sfi',
+        6  => 'loai',
+        7  => 'loami',
+        8  => 'AuthFail',
+        9  => 'PowerOff',
+        10 => 'deactiveSucc',
+        11 => 'deactiveFail',
+        12 => 'Reboot',
+        13 => 'Shutdown',
+      ];
+
+      // Ambil nama cause
+      $causeText = isset($causeMap[(int)$offlineCause]) ? $causeMap[(int)$offlineCause] : 'Unknown';
     }
 
     return response()->json([
       'data' => $onurx,
-      'pop' => $pop // Menambahkan key untuk $pop
+      'pop' => $pop,
+      'offlineCause' => $causeText, // Menambahkan key untuk $pop
+      'desc' => $desc
     ]);
   }
 }

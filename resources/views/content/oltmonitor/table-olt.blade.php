@@ -41,9 +41,11 @@
   <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="exampleModalLabel1">Signal Ont</h5>
+        <h5 class="modal-title" id="modalLabel"></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
+      <!-- Garis pembatas -->
+      <hr class="my-0">
       <div class="modal-body">
         <div class="row">
           <p id="snmpData"></p> <!-- Tempat menampilkan hasil data SNMP -->

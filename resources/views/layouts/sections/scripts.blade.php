@@ -27,7 +27,7 @@
                   "data": "ponid",
                   "render": function(data, type, row) {
                       if (!data) return "-"; // Jika data kosong, tampilkan "-"
-                      console.log(data);
+                      // console.log(data);
                       // Pisahkan OID dan ambil nilai yang diperlukan
                       let oidParts = data.split(".");
                       let ontId = parseInt(oidParts.pop()); // Ambil ONT ID (angka terakhir)
@@ -84,6 +84,8 @@
                               data-bs-toggle="modal"
                               data-bs-target="#basicModal"
                               data-oid=".1.3.6.1.4.1.3902.1012.3.50.12.1.1.10.${row.ponid}"
+                              data-cause=".1.3.6.1.4.1.3902.1082.500.10.2.3.8.1.7.${row.ponid}"
+                              data-desc="${row.description}"
                               data-pop="${row.pop}">
                               <i class='bx bx-signal-5'></i>
                               </button>`;
@@ -106,16 +108,19 @@
         });
     });
 
-    let intervalID = null; // Variabel global untuk menyimpan interval
+  let intervalID = null; // Variabel global untuk menyimpan interval
 
   $(document).on("click", ".btnSnmp", function() {
+    let desc = $(this).data("desc");
     let rawoid = $(this).data("oid");
     let pop = $(this).data("pop");
     let oid = rawoid.replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
+    let rawcause = $(this).data("cause").replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
+    let cause = convertOid(rawcause);
 
     $("#snmpData").html("<span class='text-muted'>Fetching data...</span>");
 
-    fetchSNMPData(oid, pop);
+    fetchSNMPData(oid, pop, cause, desc);
 
     // Hentikan interval jika ada yang berjalan sebelumnya
     if (intervalID !== null) {
@@ -126,7 +131,7 @@
     // Set interval untuk refresh data setiap 1 menit
     intervalID = setInterval(function() {
         console.log("Fetching data...");
-        fetchSNMPData(oid, pop);
+        fetchSNMPData(oid, pop, cause, desc);
     }, 60000);
 
     console.log("Interval baru dibuat:", intervalID);
@@ -141,20 +146,25 @@ $("#basicModal").on("hidden.bs.modal", function() {
     }
 });
 
-function fetchSNMPData(oid, pop) {
+function fetchSNMPData(oid, pop, cause, desc) {
   $.ajax({
       url: "{{ route('signal-ont') }}",
       method: "POST",
       headers: { "X-CSRF-TOKEN": $('meta[name="csrf-token"]').attr("content") },
       data: {
         oid: oid,
-        pop: pop
+        pop: pop,
+        cause: cause,
+        desc: desc
       },
       success: function(response) {
           let timestamp = new Date().toLocaleString(); // Ambil waktu saat ini
-
+          $("#modalLabel").html(`
+              <p>Realtime Monitoring ONT ${response.desc}</p>
+          `);
           $("#snmpData").html(`
               <p>Ont Signal: ${response.data}</p>
+              <p>Last Down Cause: ${response.offlineCause}</p>
               <p class="text-muted">Updated at: ${timestamp}</p>
           `);
       },
@@ -163,6 +173,15 @@ function fetchSNMPData(oid, pop) {
           $("#snmpData").text("Error fetching data.");
       }
   });
+}
+
+function convertOid(oid, offset = 16711682) {
+    oid = oid.replace(/^\./, ''); // hapus titik awal jika ada
+    let parts = oid.split('.');
+    if (parts.length < 2) return null;
+
+    parts[parts.length - 2] = parseInt(parts[parts.length - 2]) + offset;
+    return '.' + parts.join('.');
 }
 </script>
 <!-- END: Theme JS-->
