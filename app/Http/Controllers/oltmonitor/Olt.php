@@ -22,7 +22,7 @@ class Olt extends Controller
     $length = $request->input('length', 10);
 
     // Query dasar tanpa limit
-    $query = SnmpData::select('id', 'description', 'ponid', 'onurx', 'onutx', 'lastonline', 'lastoffline','reason','pop');
+    $query = SnmpData::select('id', 'description', 'ponid', 'onurx', 'onutx', 'lastonline', 'lastoffline','reason','pop', 'phase');
 
     // Total Data Sebelum Filter
     $recordsTotal = $query->count();
@@ -85,19 +85,10 @@ class Olt extends Controller
 
       // Mapping angka ke nama
       $causeMap = [
-        1  => 'unknown',
-        2  => 'LOS',
-        3  => 'LOSi',
-        4  => 'LOFi',
-        5  => 'sfi',
-        6  => 'loai',
-        7  => 'loami',
-        8  => 'AuthFail',
-        9  => 'PowerOff',
-        10 => 'deactiveSucc',
-        11 => 'deactiveFail',
-        12 => 'Reboot',
-        13 => 'Shutdown',
+        1  => 'LOS',
+        3  => 'Working',
+        4  => 'Dying Gasp',
+        6  => 'Offline',
       ];
 
       // Ambil nama cause
@@ -117,19 +108,10 @@ class Olt extends Controller
 
       // Mapping angka ke nama
       $causeMap = [
-        1  => 'unknown',
-        2  => 'LOS',
-        3  => 'LOSi',
-        4  => 'LOFi',
-        5  => 'sfi',
-        6  => 'loai',
-        7  => 'loami',
-        8  => 'AuthFail',
-        9  => 'PowerOff',
-        10 => 'deactiveSucc',
-        11 => 'deactiveFail',
-        12 => 'Reboot',
-        13 => 'Shutdown',
+        1  => 'LOS',
+        3  => 'Working',
+        4  => 'Dying Gasp',
+        6  => 'Offline',
       ];
 
       // Ambil nama cause

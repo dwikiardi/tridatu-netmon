@@ -56,24 +56,38 @@
                     return (dbm > 50 || dbm < -50) ? "-50" : dbm.toFixed(2);
                 }
               },
-                {
-                  "data": "onutx",
+              {
+                  "data": "phase",
                   "render": function(data, type, row) {
-                  let dbm = (data * 0.002) - 30;
-                  return (dbm > 50 || dbm < -50) ? "-50" : dbm.toFixed(2);
-                }
+                      if (data == 3) return "working";
+                      if (data == 6) return "Offline";
+                      if (data == 4) return "Dying Gasp";
+                      if (data == 1) return "LOS";
+                      return data;
+                  }
                 },
                 { "data": "lastonline" },
                 { "data": "lastoffline" },
                 {
-                    "data": "reason",
-                    "render": function(data, type, row) {
-                        if (data == 3) return "working";
-                        if (data == 6) return "Offline";
-                        if (data == 4) return "Dying Gasp";
-                        if (data == 1) return "LOS";
-                        return data;
-                    }
+                  data: "reason",
+                  render: function(data, type, row) {
+                      const map = {
+                          1: "unknown",
+                          2: "LOS",
+                          3: "LOSi",
+                          4: "LOFi",
+                          5: "sfi",
+                          6: "loai",
+                          7: "loami",
+                          8: "AuthFail",
+                          9: "PowerOff",
+                          10: "deactiveSucc",
+                          11: "deactiveFail",
+                          12: "Reboot",
+                          13: "Shutdown"
+                      };
+                      return map[data] || data;
+                  }
                 },
                 { "data": "pop" },
                 {
@@ -84,7 +98,7 @@
                               data-bs-toggle="modal"
                               data-bs-target="#basicModal"
                               data-oid=".1.3.6.1.4.1.3902.1012.3.50.12.1.1.10.${row.ponid}"
-                              data-cause=".1.3.6.1.4.1.3902.1082.500.10.2.3.8.1.7.${row.ponid}"
+                              data-cause=".1.3.6.1.4.1.3902.1012.3.28.2.1.4.${row.ponid}"
                               data-desc="${row.description}"
                               data-pop="${row.pop}">
                               <i class='bx bx-signal-5'></i>
@@ -115,9 +129,8 @@
     let rawoid = $(this).data("oid");
     let pop = $(this).data("pop");
     let oid = rawoid.replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
-    let rawcause = $(this).data("cause").replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
-    let cause = convertOid(rawcause);
-
+    let cause = $(this).data("cause").replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
+    // let cause = convertOid(rawcause);
     $("#snmpData").html("<span class='text-muted'>Fetching data...</span>");
 
     fetchSNMPData(oid, pop, cause, desc);
@@ -133,7 +146,7 @@
         console.log("Fetching data...");
         fetchSNMPData(oid, pop, cause, desc);
     }, 60000);
-
+    console.log(cause);
     console.log("Interval baru dibuat:", intervalID);
   });
 
@@ -164,7 +177,7 @@ function fetchSNMPData(oid, pop, cause, desc) {
           `);
           $("#snmpData").html(`
               <p>Ont Signal: ${response.data}</p>
-              <p>Last Down Cause: ${response.offlineCause}</p>
+              <p>Status: ${response.offlineCause}</p>
               <p class="text-muted">Updated at: ${timestamp}</p>
           `);
       },
@@ -175,14 +188,14 @@ function fetchSNMPData(oid, pop, cause, desc) {
   });
 }
 
-function convertOid(oid, offset = 16711682) {
-    oid = oid.replace(/^\./, ''); // hapus titik awal jika ada
-    let parts = oid.split('.');
-    if (parts.length < 2) return null;
+// function convertOid(oid, offset = 16711682) {
+//     oid = oid.replace(/^\./, ''); // hapus titik awal jika ada
+//     let parts = oid.split('.');
+//     if (parts.length < 2) return null;
 
-    parts[parts.length - 2] = parseInt(parts[parts.length - 2]) + offset;
-    return '.' + parts.join('.');
-}
+//     parts[parts.length - 2] = parseInt(parts[parts.length - 2]) + offset;
+//     return '.' + parts.join('.');
+// }
 </script>
 <!-- END: Theme JS-->
 <!-- Pricing Modal JS-->

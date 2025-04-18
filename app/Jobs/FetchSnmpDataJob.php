@@ -33,7 +33,8 @@ class FetchSnmpDataJob implements ShouldQueue
         $desc = snmp2_real_walk($host, 'tridatunet', ".1.3.6.1.4.1.3902.1012.3.28.1.1.3");
         $lastonline = snmp2_walk($host, 'tridatunet', ".1.3.6.1.4.1.3902.1012.3.28.2.1.5", '100000000000', 10);
         $lastoffline = snmp2_walk($host, 'tridatunet', ".1.3.6.1.4.1.3902.1012.3.28.2.1.6", '100000000000', 10);
-        $reason = snmp2_walk($host, 'tridatunet', ".1.3.6.1.4.1.3902.1012.3.28.2.1.4", '100000000000', 10);
+        $reason = snmp2_walk($host, 'tridatunet', ".1.3.6.1.4.1.3902.1082.500.10.2.3.8.1.7", '100000000000', 10);
+        $phase = snmp2_walk($host, 'tridatunet', ".1.3.6.1.4.1.3902.1012.3.28.2.1.4", '100000000000', 10);
 
         // Ambil jumlah ONT dari desc
         $ontCount = count($desc);
@@ -54,6 +55,7 @@ class FetchSnmpDataJob implements ShouldQueue
           'lastoffline' => $lastoffline,
           'reason' => $reason,
           'pop' => $popArray, // Tambahkan lokasi POP
+          'phase' => $phase
         ];
 
         // Persiapkan data untuk database
@@ -67,12 +69,13 @@ class FetchSnmpDataJob implements ShouldQueue
               'lastoffline' => $lastoffline[$index] ?? null,
               'reason' => $reason[$index] ?? null,
               'pop' => $popArray[$index] ?? null,
+              'phase' => $phase[$index] ?? null,
           ];
         }
       }
       // Upsert data ke database untuk menghindari duplikasi
       if (!empty($records)) {
-        SnmpData::upsert($records, ['ponid'], ['description', 'onurx', 'onutx', 'lastonline', 'lastoffline', 'reason', 'pop']);
+        SnmpData::upsert($records, ['ponid'], ['description', 'onurx', 'onutx', 'lastonline', 'lastoffline', 'reason', 'pop', 'phase']);
       }
       Log::info("Processed host: $host, Records: " . count($records));
     }

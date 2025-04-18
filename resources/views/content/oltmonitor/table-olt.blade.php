@@ -22,10 +22,10 @@
           <th>Description</th>
           <th>Pon</th>
           <th>ONU Tx</th>
-          <th>ONU Rx</th>
+          <th>Phase</th>
           <th>Last Online</th>
           <th>Last Offline</th>
-          <th>Reason</th>
+          <th>Last Reason</th>
           <th>POP</th>
           <th>Action</th>
         </tr>
