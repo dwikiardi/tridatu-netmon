@@ -19,7 +19,7 @@ class UserController extends Controller
         $start = $request->input('start', 0);
         $length = $request->input('length', 10);
 
-        $query = User::select('id', 'name', 'email', 'jabatan');
+        $query = User::select('id', 'name', 'username', 'email', 'jabatan');
 
         $recordsTotal = $query->count();
 
@@ -27,6 +27,7 @@ class UserController extends Controller
             $query->where(function ($q) use ($searchValue) {
                 $q->where('id', 'LIKE', "%{$searchValue}%")
                   ->orWhere('name', 'LIKE', "%{$searchValue}%")
+                  ->orWhere('username', 'LIKE', "%{$searchValue}%")
                   ->orWhere('email', 'LIKE', "%{$searchValue}%")
                   ->orWhere('jabatan', 'LIKE', "%{$searchValue}%");
             });
@@ -57,7 +58,7 @@ class UserController extends Controller
     public function update(Request $request)
     {
         $user = User::findOrFail($request->id);
-        $data = $request->only(['name', 'email', 'jabatan']);
+        $data = $request->only(['name', 'username', 'email', 'jabatan']);
         if ($request->password) {
             $data['password'] = Hash::make($request->password);
         }
@@ -78,6 +79,7 @@ class UserController extends Controller
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,
+            'username' => $user->username,
             'email' => $user->email,
             'jabatan' => $user->jabatan,
         ]);

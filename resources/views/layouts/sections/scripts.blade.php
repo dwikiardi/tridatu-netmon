@@ -513,6 +513,7 @@
             "columns": [
                 { "data": "id" },
                 { "data": "name" },
+                { "data": "username" },
                 { "data": "email" },
                 { "data": "jabatan" },
                 {
@@ -551,6 +552,7 @@
                     $("#dataDetailUser").html(`
                         <p><b>ID:</b> ${response.id}</p>
                         <p><b>Name:</b> ${response.name}</p>
+                        <p><b>Username:</b> ${response.username ?? '-'}</p>
                         <p><b>Email:</b> ${response.email ?? '-'}</p>
                         <p><b>Jabatan:</b> ${response.jabatan ?? '-'}</p>
                     `);
@@ -572,6 +574,7 @@
                 success: function(response) {
                     $("#id").val(response.id);
                     $("#name").val(response.name);
+                    $("#username").val(response.username);
                     $("#email").val(response.email);
                     $("#jabatan").val(response.jabatan);
                     $("#password").val(''); // Kosongkan password
@@ -591,6 +594,7 @@
             var formData = {
                 id: $('#id').val(),
                 name: $('#name').val(),
+                username: $('#username').val(),
                 email: $('#email').val(),
                 jabatan: $('#jabatan').val(),
                 password: $('#password').val(),
