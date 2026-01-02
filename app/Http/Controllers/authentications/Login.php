@@ -18,7 +18,7 @@ class Login extends Controller
   public function processLogin(Request $request)
   {
       $credentials = [
-        'name' => $request->username,
+        'username' => $request->username,
         'password' => $request->password,
       ];
 
@@ -32,10 +32,10 @@ class Login extends Controller
           return redirect()->intended('/');
       }
 
-      Log::warning('Login failed for email: ' . $request->email); // Log jika gagal
+      Log::warning('Login failed for username: ' . $request->username); // Log jika gagal
 
       return back()->withErrors([
-          'email' => 'Email atau password salah.',
+          'username' => 'Username atau password salah.',
       ]);
   }
 
