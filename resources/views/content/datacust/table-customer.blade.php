@@ -335,6 +335,7 @@ $(document).ready(function() {
   $.ajax({
     url: '{{ url("user/data") }}',
     type: 'GET',
+    data: { length: 1000 },
     success: function(response) {
       // Clear existing options except the first one
       $('#sales').find('option:not(:first)').remove();
