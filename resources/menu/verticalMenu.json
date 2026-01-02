@@ -14,6 +14,30 @@
       ]
     },
     {
+      "url": "datacust/view",
+      "name": "Data Customer",
+      "icon": "menu-icon bx bxs-user-detail",
+      "slug": "view-customer"
+    },
+    {
+      "url": "ticketing/view",
+      "name": "Data Ticketing",
+      "icon": "menu-icon bx bx-receipt",
+      "slug": "view-ticketing"
+    },
+    {
+      "url": "report/customer-log",
+      "name": "Customer Log",
+      "icon": "menu-icon tf-icons bx bx-history",
+      "slug": "view-customer-log"
+    },
+    {
+      "url": "report/view",
+      "name": "Report",
+      "icon": "menu-icon tf-icons bx bx-chart",
+      "slug": "view-report"
+    },
+    {
       "url": "oltmonitor/view",
       "name": "Olt Monitor",
       "icon": "menu-icon tf-icons bx bx-collection",
@@ -25,19 +49,14 @@
       "slug": "pages-account-settings",
       "submenu": [
         {
+          "url": "/user/view",
+          "name": "Data Staff",
+          "slug": "view-user"
+        },
+        {
           "url": "pages/account-settings-account",
           "name": "Account",
           "slug": "pages-account-settings-account"
-        },
-        {
-          "url": "pages/account-settings-notifications",
-          "name": "Notifications",
-          "slug": "pages-account-settings-notifications"
-        },
-        {
-          "url": "pages/account-settings-connections",
-          "name": "Connections",
-          "slug": "pages-account-settings-connections"
         }
       ]
     }

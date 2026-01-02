@@ -44,7 +44,12 @@ use App\Http\Controllers\form_layouts\VerticalForm;
 use App\Http\Controllers\form_layouts\HorizontalForm;
 use App\Http\Controllers\tables\Basic as TablesBasic;
 use App\Http\Controllers\oltmonitor\Olt as TablesOlt;
+use App\Http\Controllers\datacust\CustomerController as TablesCustomer;
+use App\Http\Controllers\report\CustomerLogController;
+use App\Http\Controllers\ticketing\TicketController;
+use App\Http\Controllers\report\ReportController;
 use App\Http\Controllers\authentications\Login as Login;
+use App\Http\Controllers\UserController;
 
 // // Menampilkan halaman login
 // Route::get('/login', [Auth::class, 'showLogin'])->name('login');
@@ -63,10 +68,65 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/oltmonitor/view', [TablesOlt::class, 'index'])->name('view-olt');
     Route::get('/oltmonitor/data', [TablesOlt::class, 'dataOnt'])->name('table-olt');
     Route::post('/oltmonitor/signal', [TablesOlt::class, 'signalOnt'])->name('signal-ont');
+    // layput datacust
+     Route::get('/datacust/view', [TablesCustomer::class, 'index'])->name('view-customer');
+     Route::get('/datacust/data', [TablesCustomer::class, 'show'])->name('show-customer');
+     Route::get('/datacust/detail', [TablesCustomer::class, 'detail'])->name('detail-customer');
+     Route::post('/datacust/store', [TablesCustomer::class, 'store'])->name('store-customer');
+     Route::put('/datacust/update', [TablesCustomer::class, 'update'])->name('update-customer');
+     Route::delete('/datacust/delete', [TablesCustomer::class, 'destroy'])->name('delete-customer');
+     Route::get('/datacust/pops', [TablesCustomer::class, 'getPops'])->name('get-pops');
+    // customer log report
+     Route::get('/report/customer-log', [CustomerLogController::class, 'index'])->name('view-customer-log');
+     Route::get('/report/customer-log/show', [CustomerLogController::class, 'show'])->name('show-customer-log');
+     Route::get('/report/customer-log/customers', [CustomerLogController::class, 'getCustomers'])->name('get-customers');
+    // ticketing
+     Route::get('/ticketing/view', [TicketController::class, 'index'])->name('view-ticketing');
+     Route::get('/ticketing/data', [TicketController::class, 'show'])->name('show-ticketing');
+     Route::get('/ticketing/detail', [TicketController::class, 'detail'])->name('detail-ticketing');
+     Route::get('/ticketing/api/detail', [TicketController::class, 'getTicketDetail'])->name('get-ticket-detail');
+     Route::get('/ticketing/api/replies', [TicketController::class, 'getReplies'])->name('get-ticket-replies');
+     Route::post('/ticketing/api/update-rfo', [TicketController::class, 'updateRfo'])->name('update-rfo');
+     Route::get('/ticketing/export-rfo/{id}', [TicketController::class, 'exportSingleRfo'])->name('export-rfo-single');
+     Route::post('/ticketing/api/reply', [TicketController::class, 'storeReply'])->name('store-ticket-reply');
+     Route::post('/ticketing/store', [TicketController::class, 'store'])->name('store-ticketing');
+     Route::put('/ticketing/update', [TicketController::class, 'update'])->name('update-ticketing');
+     Route::delete('/ticketing/delete', [TicketController::class, 'destroy'])->name('delete-ticketing');
+     Route::get('/ticketing/customers', [TicketController::class, 'getCustomers'])->name('get-ticketing-customers');
+     Route::get('/tickets/survey-projects', [TicketController::class, 'getSurveyProjects'])->name('get-survey-projects');
+     Route::get('/existing-customers-with-survey', [TicketController::class, 'getExistingCustomersWithSurvey'])->name('get-existing-customers-with-survey');
+     Route::get('/ticketing/teknisi', [TicketController::class, 'getTeknisi'])->name('get-ticketing-teknisi');
+     Route::get('/ticketing/sales', [TicketController::class, 'getSales'])->name('get-ticketing-sales');
+     Route::get('/calon-customers', [TicketController::class, 'getCalonCustomers'])->name('get-calon-customers');
+     Route::get('/ticketing/{ticketId}', [TicketController::class, 'showDetailPage'])->name('show-ticket-detail-page');
+     // Debug route - hapus setelah selesai debugging
+     Route::get('/debug/customers', function() {
+         $customers = \App\Models\Customer::orderBy('created_at', 'desc')->limit(5)->get();
+         return response()->json($customers);
+     });
+    // report
+     Route::get('/report/view', [ReportController::class, 'index'])->name('view-report');
+     Route::get('/report/customer/data', [ReportController::class, 'getReportCustomer'])->name('report.customer.data');
+     Route::get('/report/maintenance/data', [ReportController::class, 'getReportMaintenance'])->name('report.maintenance.data');
+     Route::get('/report/customer/summary', [ReportController::class, 'getSummaryCustomer'])->name('report.customer.summary');
+     Route::get('/report/maintenance/summary', [ReportController::class, 'getSummaryMaintenance'])->name('report.maintenance.summary');
+     Route::get('/report/sales/users', [ReportController::class, 'getSalesUsers'])->name('report.sales.users');
+     Route::post('/report/filter/save', [ReportController::class, 'saveFilterPreference'])->name('report.filter.save');
+     Route::get('/report/filters/{type}', [ReportController::class, 'getSavedFilters'])->name('report.filters.get');
+     Route::delete('/report/filter/{id}', [ReportController::class, 'deleteFilter'])->name('report.filter.delete');
+     Route::get('/report/export/excel', [ReportController::class, 'exportExcel'])->name('report.export.excel');
+     Route::get('/report/export/pdf', [ReportController::class, 'exportPdf'])->name('report.export.pdf');
+     Route::get('/report/export/rfo', [ReportController::class, 'exportRFO'])->name('report.export.rfo');
+    // user management
+     Route::get('/user/view', [UserController::class, 'index'])->name('view-user');
+     Route::get('/user/data', [UserController::class, 'show'])->name('show-user');
+     Route::get('/user/detail', [UserController::class, 'detail'])->name('detail-user');
+     Route::post('/user/store', [UserController::class, 'store'])->name('store-user');
+     Route::put('/user/update', [UserController::class, 'update'])->name('update-user');
+     Route::delete('/user/delete', [UserController::class, 'destroy'])->name('delete-user');
     //logout
     Route::post('/auth/logout', [Login::class, 'logout'])->name('logout');
 });
-
 // layout
 Route::get('/layouts/without-menu', [WithoutMenu::class, 'index'])->name('layouts-without-menu');
 Route::get('/layouts/without-navbar', [WithoutNavbar::class, 'index'])->name('layouts-without-navbar');
@@ -76,6 +136,8 @@ Route::get('/layouts/blank', [Blank::class, 'index'])->name('layouts-blank');
 
 // pages
 Route::get('/pages/account-settings-account', [AccountSettingsAccount::class, 'index'])->name('pages-account-settings-account');
+Route::post('/pages/account-settings-account/update', [AccountSettingsAccount::class, 'update'])->name('pages-account-settings-account-update');
+Route::post('/pages/account-settings-account/change-password', [AccountSettingsAccount::class, 'changePassword'])->name('pages-account-settings-account-change-password');
 Route::get('/pages/account-settings-notifications', [AccountSettingsNotifications::class, 'index'])->name('pages-account-settings-notifications');
 Route::get('/pages/account-settings-connections', [AccountSettingsConnections::class, 'index'])->name('pages-account-settings-connections');
 Route::get('/pages/misc-error', [MiscError::class, 'index'])->name('pages-misc-error');

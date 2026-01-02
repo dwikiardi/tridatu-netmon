@@ -13,6 +13,7 @@
 <script src="{{asset('assets/js/ui-modals.js')}}"></script>
 <script>
     $(document).ready(function() {
+      //Table Olt Monitor
       $('#myTable').DataTable({
             "processing": true,
             "serverSide": true,
@@ -120,82 +121,525 @@
                 }
             }
         });
-    });
+      });
 
-  let intervalID = null; // Variabel global untuk menyimpan interval
+      let intervalID = null; // Variabel global untuk menyimpan interval
 
-  $(document).on("click", ".btnSnmp", function() {
-    let desc = $(this).data("desc");
-    let rawoid = $(this).data("oid");
-    let pop = $(this).data("pop");
-    let oid = rawoid.replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
-    let cause = $(this).data("cause").replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
-    // let cause = convertOid(rawcause);
-    $("#snmpData").html("<span class='text-muted'>Fetching data...</span>");
+      $(document).on("click", ".btnSnmp", function() {
+        let desc = $(this).data("desc");
+        let rawoid = $(this).data("oid");
+        let pop = $(this).data("pop");
+        let oid = rawoid.replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
+        let cause = $(this).data("cause").replace(/\.iso\.3\.6\.1\.4\.1\.3902\.1012\.3\.28\.1\.1\.3/, '');
+        // let cause = convertOid(rawcause);
+        $("#snmpData").html("<span class='text-muted'>Fetching data...</span>");
 
-    fetchSNMPData(oid, pop, cause, desc);
-
-    // Hentikan interval jika ada yang berjalan sebelumnya
-    if (intervalID !== null) {
-        clearInterval(intervalID);
-        console.log("Interval dihentikan sebelum membuat yang baru.");
-    }
-
-    // Set interval untuk refresh data setiap 1 menit
-    intervalID = setInterval(function() {
-        console.log("Fetching data...");
         fetchSNMPData(oid, pop, cause, desc);
-    }, 60000);
-    console.log(cause);
-    console.log("Interval baru dibuat:", intervalID);
-  });
 
-// Hentikan interval saat modal ditutup
-$("#basicModal").on("hidden.bs.modal", function() {
-    if (intervalID !== null) {
-        clearInterval(intervalID);
-        console.log("Interval dihentikan karena modal ditutup.");
-        intervalID = null; // Reset variabel
-    }
-});
+        // Hentikan interval jika ada yang berjalan sebelumnya
+        if (intervalID !== null) {
+            clearInterval(intervalID);
+            console.log("Interval dihentikan sebelum membuat yang baru.");
+        }
 
-function fetchSNMPData(oid, pop, cause, desc) {
-  $.ajax({
-      url: "{{ route('signal-ont') }}",
-      method: "POST",
-      headers: { "X-CSRF-TOKEN": $('meta[name="csrf-token"]').attr("content") },
-      data: {
-        oid: oid,
-        pop: pop,
-        cause: cause,
-        desc: desc
-      },
-      success: function(response) {
-          let timestamp = new Date().toLocaleString(); // Ambil waktu saat ini
-          $("#modalLabel").html(`
-              <p>Realtime Monitoring ONT ${response.desc}</p>
-          `);
-          $("#snmpData").html(`
-              <p>Ont Signal: ${response.data}</p>
-              <p>Status: ${response.offlineCause}</p>
-              <p class="text-muted">Updated at: ${timestamp}</p>
-          `);
-      },
-      error: function(xhr, status, error) {
-          console.error("SNMP Fetch Error:", error);
-          $("#snmpData").text("Error fetching data.");
+        // Set interval untuk refresh data setiap 1 menit
+        intervalID = setInterval(function() {
+            console.log("Fetching data...");
+            fetchSNMPData(oid, pop, cause, desc);
+        }, 60000);
+        console.log(cause);
+        console.log("Interval baru dibuat:", intervalID);
+      });
+
+      // Hentikan interval saat modal ditutup
+      $("#basicModal").on("hidden.bs.modal", function() {
+          if (intervalID !== null) {
+              clearInterval(intervalID);
+              console.log("Interval dihentikan karena modal ditutup.");
+              intervalID = null; // Reset variabel
+          }
+      });
+
+      function fetchSNMPData(oid, pop, cause, desc) {
+        $.ajax({
+            url: "{{ route('signal-ont') }}",
+            method: "POST",
+            headers: { "X-CSRF-TOKEN": $('meta[name="csrf-token"]').attr("content") },
+            data: {
+              oid: oid,
+              pop: pop,
+              cause: cause,
+              desc: desc
+            },
+            success: function(response) {
+                let timestamp = new Date().toLocaleString(); // Ambil waktu saat ini
+                $("#modalLabel").html(`
+                    <p>Realtime Monitoring ONT ${response.desc}</p>
+                `);
+                $("#snmpData").html(`
+                    <p>Ont Signal: ${response.data}</p>
+                    <p>Status: ${response.offlineCause}</p>
+                    <p class="text-muted">Updated at: ${timestamp}</p>
+                `);
+            },
+            error: function(xhr, status, error) {
+                console.error("SNMP Fetch Error:", error);
+                $("#snmpData").text("Error fetching data.");
+            }
+        });
       }
-  });
-}
 
-// function convertOid(oid, offset = 16711682) {
-//     oid = oid.replace(/^\./, ''); // hapus titik awal jika ada
-//     let parts = oid.split('.');
-//     if (parts.length < 2) return null;
+      //table data customer
+      $('#tableCustomer').DataTable({
+            "processing": true,
+            "serverSide": true,
+            "ajax": {
+                "url": "{{ route('show-customer') }}", // Ganti dengan endpoint API/backend Anda
+                "type": "GET",
+                "dataSrc": "data"  // Pastikan membaca array "data"
+            },
+            "columns": [
+                { "data": "cid" },
+                {"data": "nama"},
+                {"data": "sales"},
+                {"data": "packet"},
+                {
+                    "data": "alamat",
+                    "render": function(data, type, row) {
+                        if (type !== 'display' || !data) return data || '';
+                        const maxLen = 30;
+                        const shortText = data.length > maxLen ? data.substring(0, maxLen) + '…' : data;
+                        return `<span title="${data.replace(/"/g, '&quot;')}">${shortText}</span>`;
+                    }
+                },
+                {
+                    "data": "pembayaran_perbulan_formatted",
+                    "render": function(data, type, row) {
+                        return data || '-';
+                    }
+                },
+                {"data": "tgl_customer_aktif"},
+                {"data": "billing_aktif"},
+                {"data": "status"},
+                {
+                  "data": null,
+                  "render": function(data, type, row) {
+                    return `  <button type="button"
+                              class="btn btn-primary btnDetailCust"
+                              data-bs-toggle="modal"
+                              data-bs-target="#modalDetailCust"
+                              data-cid="${row.cid}">
+                              <i class='bx  bx-info-square'></i>
+                              </button>
+                              <button type="button"
+                              class="btn btn-warning btnEditCust"
+                              data-bs-toggle="modal"
+                              data-bs-target="#modalAddCust"
+                              data-action="edit"
+                              data-cid="${row.cid}">
+                              <i class='bx bx-edit'></i>
+                              </button>
+                              <button type="button"
+                              class="btn btn-danger btnDeleteCust"
+                              data-cid="${row.cid}">
+                              <i class='bx  bx-user-minus'></i>
+                              </button>`;
+                  }
+                }
+            ],
+            "language": {
+                "lengthMenu": "Tampilkan _MENU_ data per halaman",
+                "zeroRecords": "Tidak ada data ditemukan",
+                "info": "Menampilkan _START_ hingga _END_ dari _TOTAL_ data",
+                "infoEmpty": "Tidak ada data tersedia",
+                "search": "Cari:",
+                "paginate": {
+                    "first": "Pertama",
+                    "last": "Terakhir",
+                    "next": "Berikutnya",
+                    "previous": "Sebelumnya"
+                }
+            }
+        });
 
-//     parts[parts.length - 2] = parseInt(parts[parts.length - 2]) + offset;
-//     return '.' + parts.join('.');
-// }
+        // Load sales options
+        function loadSalesOptions() {
+            $.ajax({
+                url: "{{ route('show-user') }}",
+                type: "GET",
+                data: { length: 1000 }, // Get many to cover all
+                success: function(response) {
+                    var salesSelect = $('#sales');
+                    salesSelect.find('option:not(:first)').remove(); // Keep the "Pilih Sales"
+                    response.data.forEach(function(user) {
+                        if (user.jabatan === 'sales') {
+                            salesSelect.append('<option value="' + user.name + '">' + user.name + '</option>');
+                        }
+                    });
+                },
+                error: function() {
+                    console.log('Error loading sales options');
+                }
+            });
+        }
+
+        // Load sales on page load
+        $(document).ready(function() {
+            loadSalesOptions();
+        });
+
+        $(document).on("click", ".btnDetailCust", function() {
+          let cid = $(this).data("cid");
+          $.ajax({
+              url: "{{ route('detail-customer') }}",
+              type: "GET",
+              data: {
+                  cid: cid
+              },
+              success: function (response) {
+                $("#labelModalCust").text(`Detail Customer ${response.nama}`);
+                $("#dataDetailCust").html(`
+                      <p><b>CID:</b> ${response.cid}</p>
+                      <p><b>Nama:</b> ${response.nama}</p>
+                      <p><b>Email:</b> ${response.email ?? '-'}</p>
+                      <p><b>Sales:</b> ${response.sales}</p>
+                      <p><b>Paket:</b> ${response.packet}</p>
+                      ${response.packet === 'dedicated' ? `<p><b>Note:</b> ${response.note ?? '-'}</p>` : ''}
+                      <p><b>Alamat:</b> ${response.alamat}</p>
+                                            <p><b>Koordinat:</b> ${response.coordinate_maps ? (() => {
+                                                    const coord = response.coordinate_maps;
+                                                    const isUrl = /^https?:\/\//i.test(coord);
+                                                    const href = isUrl ? coord : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coord)}`;
+                                                    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${coord}</a>`;
+                                                })() : '-'}</p>
+
+                      <hr>
+
+                      <p><b>PIC IT:</b> ${response.pic_it ?? '-'}</p>
+                      <p><b>No IT:</b> ${response.no_it ?? '-'}</p>
+                      <p><b>PIC Finance:</b> ${response.pic_finance ?? '-'}</p>
+                      <p><b>No Finance:</b> ${response.no_finance ?? '-'}</p>
+
+                      <hr>
+
+                      <p><b>Pembayaran Perbulan:</b> ${response.pembayaran_perbulan ?? '-'}</p>
+                      <p><b>Tgl Customer Aktif:</b> ${response.tgl_customer_aktif ?? '-'}</p>
+                      <p><b>Billing Aktif:</b> ${response.billing_aktif ?? '-'}</p>
+                      <p><b>Status:</b>
+                          <span class="badge bg-${response.status === 'Aktif' ? 'success' : 'danger'}">
+                              ${response.status}
+                          </span>
+                      </p>
+
+                      <hr>
+                    `);
+              },
+              error: function () {
+                  $("#dataDetailCust").html("<p class='text-danger'>Gagal mengambil data</p>");
+              }
+          });
+        });
+
+        $('#modalAddCust').on('show.bs.modal', function (event) {
+          var button = $(event.relatedTarget);
+          var action = button.data('action');
+          if (action === 'edit') {
+            $('#modalTitle').text('Edit Customer');
+          } else {
+            $('#modalTitle').text('Add Customer');
+          }
+        });
+
+        $(document).on("click", ".btnEditCust", function() {
+        let cid = $(this).data("cid");
+        $.ajax({
+            url: "{{ route('detail-customer') }}",
+            type: "GET",
+            data: {
+                cid: cid
+            },
+            success: function (response) {
+              // Populate the form fields
+              $("#cid").val(response.cid);
+              $("#nama").val(response.nama);
+              $("#email").val(response.email);
+              $("#sales").val(response.sales);
+              $("#packet").val(response.packet);
+              $("#alamat").val(response.alamat);
+              $("#pic_it").val(response.pic_it);
+              $("#no_it").val(response.no_it);
+              $("#pic_finance").val(response.pic_finance);
+              $("#no_finance").val(response.no_finance);
+              $("#coordinate_maps").val(response.coordinate_maps);
+              $("#status").val(response.status);
+              $("#pembayaran_perbulan").val(formatRupiah(response.pembayaran_perbulan));
+              $("#note").val(response.note || '');
+              $("#tgl_customer_aktif").val(response.tgl_customer_aktif || '');
+              $("#billing_aktif").val(response.billing_aktif || '');
+              toggleNoteField(response.packet);
+            },
+            error: function () {
+                alert("Gagal mengambil data customer");
+            }
+        });
+      });
+
+
+      // Fungsi format Rupiah
+      function formatRupiah(angka) {
+          var number_string = angka.replace(/[^,\d]/g, '').toString(),
+              split = number_string.split(','),
+              sisa = split[0].length % 3,
+              rupiah = split[0].substr(0, sisa),
+              ribuan = split[0].substr(sisa).match(/\d{3}/gi);
+
+          if (ribuan) {
+              separator = sisa ? '.' : '';
+              rupiah += separator + ribuan.join('.');
+          }
+
+          rupiah = split[1] != undefined ? rupiah + ',' + split[1] : rupiah;
+          return rupiah ? 'Rp. ' + rupiah : '';
+      }
+
+      // Event untuk format input pembayaran_perbulan
+      $(document).on('input', '#pembayaran_perbulan', function() {
+          var val = $(this).val();
+          $(this).val(formatRupiah(val));
+      });
+
+      // Function to toggle note field
+      function toggleNoteField(packetValue) {
+          if (packetValue === 'dedicated') {
+              $('#noteField').show();
+          } else {
+              $('#noteField').hide();
+              $('#note').val('');
+          }
+      }
+
+      // Event for packet change
+      $(document).on('change', '#packet', function() {
+          var packetValue = $(this).val();
+          toggleNoteField(packetValue);
+      });
+
+      // Event untuk save customer
+      $(document).on('click', '#btnSaveCust', function() {
+          console.log('Save button clicked');
+          var isEdit = $('#modalTitle').text() === 'Edit Customer';
+          console.log('Is Edit:', isEdit);
+          var url = isEdit ? "{{ url('/datacust/update') }}" : "{{ url('/datacust/store') }}";
+          var method = isEdit ? 'PUT' : 'POST';
+
+          var formData = {
+              cid: $('#cid').val(),
+              nama: $('#nama').val(),
+              email: $('#email').val(),
+              sales: $('#sales').val(),
+              packet: $('#packet').val(),
+              alamat: $('#alamat').val(),
+              pic_it: $('#pic_it').val(),
+              no_it: $('#no_it').val(),
+              pic_finance: $('#pic_finance').val(),
+              no_finance: $('#no_finance').val(),
+              coordinate_maps: $('#coordinate_maps').val(),
+              pembayaran_perbulan: $('#pembayaran_perbulan').val().replace(/[^0-9]/g, ''), // Ekstrak angka saja
+              status: $('#status').val(),
+              note: $('#note').val(),
+              tgl_customer_aktif: $('#tgl_customer_aktif').val(),
+              billing_aktif: $('#billing_aktif').val(),
+              _token: $('meta[name="csrf-token"]').attr('content')
+          };
+           if (isEdit) {
+              formData._method = 'PUT';
+          }
+
+          console.log('Is Edit:', isEdit);
+          console.log('URL:', url);
+          console.log('Method:', method);
+          console.log('Form Data:', formData);
+          console.log('Sending AJAX...');
+
+          $.ajax({
+              url: url,
+              type: method,
+              data: formData,
+              success: function(response) {
+                  console.log('Success:', response);
+                  $('#modalAddCust').modal('hide');
+                  $('#tableCustomer').DataTable().ajax.reload();
+                  alert('Customer saved successfully');
+              },
+              error: function(xhr, status, error) {
+                  console.log('Error:', xhr.status, xhr.responseText);
+                  alert('Error saving customer: ' + xhr.responseText);
+              }
+          });
+        });
+
+        // Event untuk delete customer
+        $(document).on('click', '.btnDeleteCust', function() {
+            var cid = $(this).data('cid');
+            if (confirm('Are you sure you want to delete this customer?')) {
+                $.ajax({
+                    url: "{{ url('/datacust/delete') }}",
+                    type: 'DELETE',
+                    data: {
+                        cid: cid,
+                        _token: $('meta[name="csrf-token"]').attr('content'),
+                        _method: 'DELETE'
+                    },
+                    success: function(response) {
+                        $('#tableCustomer').DataTable().ajax.reload();
+                        alert('Customer deleted successfully');
+                    },
+                    error: function(xhr) {
+                        alert('Error deleting customer');
+                    }
+                });
+            }
+        });
+
+        // DataTable for users
+        $('#tableUser').DataTable({
+            "processing": true,
+            "serverSide": true,
+            "ajax": {
+                "url": "{{ route('show-user') }}",
+                "type": "GET",
+                "dataSrc": "data"
+            },
+            "columns": [
+                { "data": "id" },
+                { "data": "name" },
+                { "data": "email" },
+                { "data": "jabatan" },
+                {
+                    "data": null,
+                    "render": function(data, type, row) {
+                        return `<button type="button" class="btn btn-primary btnDetailUser" data-bs-toggle="modal" data-bs-target="#modalDetailUser" data-id="${row.id}"> <i class='bx bx-info-square'></i> </button>
+                                <button type="button" class="btn btn-warning btnEditUser" data-bs-toggle="modal" data-bs-target="#modalAddUser" data-action="edit" data-id="${row.id}"> <i class='bx bx-edit'></i> </button>
+                                <button type="button" class="btn btn-danger btnDeleteUser" data-id="${row.id}"> <i class='bx bx-user-minus'></i> </button>`;
+                    }
+                }
+            ],
+            "language": {
+                "lengthMenu": "Tampilkan _MENU_ data per halaman",
+                "zeroRecords": "Tidak ada data ditemukan",
+                "info": "Menampilkan _START_ hingga _END_ dari _TOTAL_ data",
+                "infoEmpty": "Tidak ada data tersedia",
+                "search": "Cari:",
+                "paginate": {
+                    "first": "Pertama",
+                    "last": "Terakhir",
+                    "next": "Berikutnya",
+                    "previous": "Sebelumnya"
+                }
+            }
+        });
+
+        // Event untuk detail user
+        $(document).on('click', '.btnDetailUser', function() {
+            var id = $(this).data('id');
+            $.ajax({
+                url: "{{ url('/user/detail') }}",
+                type: "GET",
+                data: { id: id },
+                success: function(response) {
+                    $("#labelModalUser").text(`Detail User ${response.name}`);
+                    $("#dataDetailUser").html(`
+                        <p><b>ID:</b> ${response.id}</p>
+                        <p><b>Name:</b> ${response.name}</p>
+                        <p><b>Email:</b> ${response.email ?? '-'}</p>
+                        <p><b>Jabatan:</b> ${response.jabatan ?? '-'}</p>
+                    `);
+                },
+                error: function() {
+                    $("#dataDetailUser").html("<p class='text-danger'>Gagal mengambil data</p>");
+                }
+            });
+        });
+
+        // Event untuk edit user
+        $(document).on('click', '.btnEditUser', function() {
+            var id = $(this).data('id');
+            $('#modalTitle').text('Edit User');
+            $.ajax({
+                url: "{{ url('/user/detail') }}",
+                type: "GET",
+                data: { id: id },
+                success: function(response) {
+                    $("#id").val(response.id);
+                    $("#name").val(response.name);
+                    $("#email").val(response.email);
+                    $("#jabatan").val(response.jabatan);
+                    $("#password").val(''); // Kosongkan password
+                },
+                error: function() {
+                    alert("Gagal mengambil data user");
+                }
+            });
+        });
+
+        // Event untuk save user
+        $(document).on('click', '#btnSaveUser', function() {
+            var isEdit = $('#id').val() ? true : false;
+            var url = isEdit ? "{{ url('/user/update') }}" : "{{ url('/user/store') }}";
+            var method = isEdit ? 'POST' : 'POST'; // Store POST, update POST with _method
+
+            var formData = {
+                id: $('#id').val(),
+                name: $('#name').val(),
+                email: $('#email').val(),
+                jabatan: $('#jabatan').val(),
+                password: $('#password').val(),
+                _token: $('meta[name="csrf-token"]').attr('content')
+            };
+
+            if (isEdit) {
+                formData._method = 'PUT';
+            }
+
+            $.ajax({
+                url: url,
+                type: method,
+                data: formData,
+                success: function(response) {
+                    $('#modalAddUser').modal('hide');
+                    $('#tableUser').DataTable().ajax.reload();
+                    alert('User saved successfully');
+                },
+                error: function(xhr) {
+                    alert('Error saving user: ' + xhr.responseText);
+                }
+            });
+        });
+
+        // Event untuk delete user
+        $(document).on('click', '.btnDeleteUser', function() {
+            var id = $(this).data('id');
+            if (confirm('Are you sure you want to delete this user?')) {
+                $.ajax({
+                    url: "{{ url('/user/delete') }}",
+                    type: 'DELETE',
+                    data: {
+                        id: id,
+                        _token: $('meta[name="csrf-token"]').attr('content'),
+                        _method: 'DELETE'
+                    },
+                    success: function(response) {
+                        $('#tableUser').DataTable().ajax.reload();
+                        alert('User deleted successfully');
+                    },
+                    error: function(xhr) {
+                        alert('Error deleting user');
+                    }
+                });
+            }
+        });
+
+
 </script>
 <!-- END: Theme JS-->
 <!-- Pricing Modal JS-->

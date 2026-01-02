@@ -22,7 +22,9 @@ class Login extends Controller
         'password' => $request->password,
       ];
 
-      if (Auth::attempt($credentials)) {
+      $remember = $request->has('remember');
+
+      if (Auth::attempt($credentials, $remember)) {
           $request->session()->regenerate();
 
           Log::info('User logged in: ' . auth()->user()->username); // Log ID user
