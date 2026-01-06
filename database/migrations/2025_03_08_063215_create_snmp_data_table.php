@@ -18,8 +18,8 @@ return new class extends Migration
           $table->string('pop');
           $table->decimal('onurx');
           $table->decimal('onutx');
-          $table->time('lastonline');
-          $table->time('lastoffline');
+          $table->dateTime('lastonline')->nullable();
+          $table->dateTime('lastoffline')->nullable();
           $table->string('reason');
           $table->timestamps();
         });
