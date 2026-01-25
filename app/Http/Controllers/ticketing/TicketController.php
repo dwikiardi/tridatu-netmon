@@ -699,6 +699,9 @@ class TicketController extends Controller
             'teknisi_id' => 'nullable|exists:users,id',
             'teknisi_ids' => 'nullable|array',
             'teknisi_ids.*' => 'exists:users,id',
+            // Update Date
+            'is_created_today' => 'nullable|in:on,off,true,false,1,0',
+            'custom_created_at' => 'nullable|required_if:is_created_today,off,false,0|date',
         ]);
 
         $user = Auth::user();
@@ -790,29 +793,74 @@ class TicketController extends Controller
             }
         }
 
-        // Additional guard: when tanggal/jam provided in any flow, enforce baseline
-        if (!empty($validated['tanggal_kunjungan']) || !empty($validated['jam'])) {
-            $lastReply = TicketReply::where('ticket_id', $ticket->id)->orderBy('created_at', 'desc')->first();
-            $baseline = $ticket->created_at;
-            if ($lastReply && $lastReply->created_at->gt($baseline)) {
-                $baseline = $lastReply->created_at;
-            }
-            $lastScheduleBaseline = $this->getLastScheduleBaseline($ticket);
-            if ($lastScheduleBaseline && $lastScheduleBaseline->gt($baseline)) {
-                $baseline = $lastScheduleBaseline;
-            }
+        // Determine Reply Time (Baseline for schedule validation)
+        $replyCreatedAt = now();
+        if (!$request->has('is_created_today') && $request->filled('custom_created_at')) {
+            $replyCreatedAt = \Carbon\Carbon::parse($request->input('custom_created_at'));
+        }
 
-            // Compose selectedDT even if only one of date/time provided
-            $selDate = $validated['tanggal_kunjungan'] ?? (optional($ticket->tanggal_kunjungan)->format('Y-m-d'));
-            $selTime = $validated['jam'] ?? ($ticket->jam ? \Carbon\Carbon::parse($ticket->jam)->format('H:i') : '00:00');
-            $selectedDT = $selDate ? \Carbon\Carbon::createFromFormat('Y-m-d H:i', $selDate.' '.$selTime) : null;
-            if ($selectedDT && $selectedDT->lt($baseline)) {
-                return response()->json([
-                    'message' => 'Tanggal/jam kunjungan tidak boleh kurang dari update sebelumnya.',
-                    'status' => false
-                ], 422);
+        // Additional guard: when tanggal/jam provided in any flow, enforce baseline against REPPLY time (or strictly previous logic?)
+        // The user wants to allow backdated reply so backdated schedule is valid.
+        // So baseline should be the Effective Reply Time, OR the previous state if Reply Time is also previous.
+        // Actually, logic: Schedule cannot be before the "Point of Truth".
+        // If we backdate the Reply to Jan 24, then Jan 24 schedule is valid.
+        // So validation should check against $replyCreatedAt.
+        // HOWEVER, it also shouldn't be before the Ticket Creation strictly? (Unless Ticket is also backdated, which it is in DB).
+        
+        if (!empty($validated['tanggal_kunjungan']) || !empty($validated['jam'])) {
+            // Baseline 1: Ticket Creation
+            $baseline = $ticket->created_at; 
+            
+            // Baseline 2: Last Reply (if strictly enforcing sequential updates? 
+            // If user inserts a reply in the past, effectively branching history? 
+            // Let's assume sequential: cannot verify against future replies if inserting in past.
+            // But usually we just want to ensure Schedule >= This Reply Effective Date (or slightly before? No, usually schedule is future/same as report).
+            // "Perlu Kunjungan" means Future/Now relative to Report.
+            // "Done" means Past relative to Report.
+            // But validated['tanggal_kunjungan'] is usually meant for "Next Visit".
+            // If status is "Done" or "On Progress", maybe date is meaningless?
+            
+            // If status is Need Visit, Schedule must be >= Reply Date.
+            if (($updateStatus === 'need_visit' || $updateStatus === 'pending') && isset($validated['tanggal_kunjungan'])) {
+                $selDate = $validated['tanggal_kunjungan'];
+                $selTime = $validated['jam'] ?? '00:00';
+                $selectedDT = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $selDate.' '.$selTime);
+                
+                if ($selectedDT->lt($replyCreatedAt)) {
+                     // Allow slight tolerance? No.
+                     return response()->json([
+                        'message' => 'Jadwal kunjungan (Need Visit) tidak boleh sebelum Tanggal Update.',
+                        'status' => false
+                    ], 422);
+                }
             }
         }
+
+        // Create the Reply
+        $reply = TicketReply::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'reply' => $validated['reply'],
+            'update_status' => $updateStatus,
+            'tanggal_kunjungan' => $validated['tanggal_kunjungan'] ?? null,
+            'jam_kunjungan' => $validated['jam'] ?? null,
+            // 'created_at' => $replyCreatedAt, // Not mass assignable usually
+        ]);
+
+        // Manually update timestamp if custom
+        if (!$request->has('is_created_today') && $request->filled('custom_created_at')) {
+            $reply->created_at = $replyCreatedAt;
+            $reply->updated_at = $replyCreatedAt;
+            $reply->save();
+        }
+
+        // Update Ticket Updated At as well?
+        // Usually Ticket Updated At should reflect the entry time of the latest info. 
+        // If providing backdated info, maybe update ticket to Backdated time? 
+        // Or keep it Now? 
+        // Let's set it to $replyCreatedAt to be consistent with the timeline.
+        $ticket->updated_at = $replyCreatedAt;
+        // Don't save ticket yet, proceed to $ticket->update($updateData)
 
         // Always update ticket with at least the status from reply
         $ticket->update($updateData);

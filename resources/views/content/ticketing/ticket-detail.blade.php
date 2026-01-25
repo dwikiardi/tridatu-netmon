@@ -438,8 +438,21 @@ $ticketNo = "TDN-{$tanggal}-{$jam}-{$no}";
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <hr class="my-0">
-      <div class="modal-body">
         <form id="replyForm">
+          <!-- Update Date Flexibility -->
+          <div class="mb-3">
+             <div class="form-check">
+               <input class="form-check-input" type="checkbox" id="reply_is_created_today" name="is_created_today" checked>
+               <label class="form-check-label" for="reply_is_created_today">
+                 Update Dibuat Hari Ini
+               </label>
+             </div>
+          </div>
+          <div class="mb-3" id="replyCustomDateRow" style="display: none;">
+             <label for="reply_custom_created_at" class="form-label">Waktu Update</label>
+             <input type="datetime-local" class="form-control" id="reply_custom_created_at" name="custom_created_at">
+          </div>
+
           <div class="row">
             <div class="col-md-6">
               <div class="mb-3">
@@ -742,6 +755,17 @@ $(document).ready(function() {
     $('#ticketPriority').val('{{ $ticket->priority ?? '' }}');
     // Apply min allowable date for schedule
     setMinScheduleDate();
+  });
+
+  // Handle Reply Created Today toggle
+  $('#reply_is_created_today').on('change', function() {
+    if ($(this).is(':checked')) {
+      $('#replyCustomDateRow').slideUp();
+      $('#reply_custom_created_at').prop('required', false);
+    } else {
+      $('#replyCustomDateRow').slideDown();
+      $('#reply_custom_created_at').prop('required', true);
+    }
   });
 
   // Handle status change - jangan show schedule fields untuk Pending
