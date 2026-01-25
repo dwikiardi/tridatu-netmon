@@ -221,6 +221,9 @@ class TicketController extends Controller
             // POP fields for installation
             'install_pop' => 'nullable|string',
             'install_terminate_pop' => 'nullable|string',
+            // Ticket Creation Date
+            'is_created_today' => 'nullable|in:on,off,true,false,1,0',
+            'custom_created_at' => 'nullable|required_if:is_created_today,off,false,0|date',
         ]);
 
         $user = Auth::user();
@@ -400,7 +403,31 @@ class TicketController extends Controller
             }
         }
 
-        Ticket::create($data);
+        // Handle Custom Created Date
+        $isCreatedToday = $request->has('is_created_today'); // Checkbox checks send 'on', unchecked sends nothing usually. 
+        // Wait, default HTML checkbox: checked = 'on', unchecked = nothing (missing from request).
+        // My JS validation handles 'required' for date if it's unchecked.
+        // Let's rely on the input presence.
+        
+        $customDate = $request->input('custom_created_at');
+        
+        // Logic: If checkbox is NOT checked (meaning user wants custom date) AND custom date is provided.
+        // If checkbox IS checked, we ignore custom date.
+        // Since checkbox sends nothing when unchecked, checking `$request->has('is_created_today')` works for "Checked".
+        
+        // Logic: If checkbox is NOT checked (meaning user wants custom date) AND custom date is provided.
+        // If checkbox IS checked, we ignore custom date.
+        
+        $ticket = Ticket::create($data);
+
+        if (!$request->has('is_created_today') && !empty($customDate)) {
+             $parsedDate = \Carbon\Carbon::parse($customDate);
+             // Manually set timestamps
+             $ticket->created_at = $parsedDate;
+             $ticket->updated_at = $parsedDate;
+             $ticket->save();
+        }
+
         return response()->json(['message' => 'Ticket created successfully']);
     }
 

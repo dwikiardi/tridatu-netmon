@@ -169,6 +169,20 @@
 
           <!-- Jenis Ticket -->
           <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="is_created_today" name="is_created_today" checked>
+              <label class="form-check-label" for="is_created_today">
+                Ticket Dibuat Hari Ini
+              </label>
+            </div>
+          </div>
+          
+          <div class="mb-3" id="customDateRow" style="display: none;">
+            <label for="custom_created_at" class="form-label">Tanggal Pembuatan Ticket</label>
+            <input type="datetime-local" class="form-control" id="custom_created_at" name="custom_created_at">
+          </div>
+
+          <div class="mb-3">
             <label for="jenis" class="form-label">Jenis Ticket <span class="text-danger">*</span></label>
             <select class="form-control" id="jenis" name="jenis" required>
               <option value="">Pilih Jenis</option>
@@ -513,6 +527,17 @@
 $(document).ready(function() {
   let currentAction = 'add';
   let customersData = [];
+
+  // Handle Created Today toggle
+  $('#is_created_today').on('change', function() {
+    if ($(this).is(':checked')) {
+      $('#customDateRow').slideUp();
+      $('#custom_created_at').prop('required', false);
+    } else {
+      $('#customDateRow').slideDown();
+      $('#custom_created_at').prop('required', true);
+    }
+  });
 
   // Handle Jenis Ticket change - show/hide fields dynamically
   $('#jenis').on('change', function() {
