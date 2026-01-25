@@ -345,13 +345,12 @@ $ticketNo = "TDN-{$tanggal}-{$jam}-{$no}";
                       return in_array($r->update_status, ['done', 'remote_done', 'selesai']);
                   })->first();
                   
-                  // Downtime Start: Time of 'need_visit' (Remote finished) or Ticket Created if onsite/direct
+                  // Downtime Start
                   $needVisit = $ticket->replies->where('update_status', 'need_visit')->first();
                   $downtimeStart = $ticket->created_at;
                   
                   if ($needVisit) {
                       if ($needVisit->tanggal_kunjungan && $needVisit->jam_kunjungan) {
-                          // Handle tanggal_kunjungan as string or object
                           $dateStr = ($needVisit->tanggal_kunjungan instanceof \DateTimeInterface) 
                                       ? $needVisit->tanggal_kunjungan->format('Y-m-d') 
                                       : substr((string)$needVisit->tanggal_kunjungan, 0, 10);
@@ -359,36 +358,42 @@ $ticketNo = "TDN-{$tanggal}-{$jam}-{$no}";
                           try {
                              $downtimeStart = \Carbon\Carbon::parse($dateStr . ' ' . $timeStr);
                           } catch(\Exception $e) {
-                             // Retry without seconds if failed
-                             try {
-                                $downtimeStart = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $dateStr . ' ' . substr($timeStr, 0, 5));
-                             } catch(\Exception $ex) {
-                                $downtimeStart = $needVisit->created_at;
-                             }
+                             $downtimeStart = $needVisit->created_at;
                           }
                       } else {
                           $downtimeStart = $needVisit->created_at;
                       }
                   }
 
+                  // Uptime End (End of Downtime)
+                  $uptimeEnd = $firstResolve ? $firstResolve->created_at : null;
+                  if ($firstResolve && $firstResolve->tanggal_kunjungan && $firstResolve->jam_kunjungan) {
+                      try {
+                          $dPart = ($firstResolve->tanggal_kunjungan instanceof \DateTimeInterface) 
+                                      ? $firstResolve->tanggal_kunjungan->format('Y-m-d') 
+                                      : substr((string)$firstResolve->tanggal_kunjungan, 0, 10);
+                          $uptimeEnd = \Carbon\Carbon::parse($dPart . ' ' . $firstResolve->jam_kunjungan);
+                      } catch(\Exception $e) {}
+                  }
+
                   // Formats
                   $downtimeStartDate = $downtimeStart->format('d-m-Y H:i');
-                  $uptime = $firstResolve ? $firstResolve->created_at->format('d-m-Y H:i') : '-'; 
+                  $uptime = $uptimeEnd ? $uptimeEnd->format('d-m-Y H:i') : '-'; 
                   $downtime = $ticket->sla_total_minutes ? $ticket->sla_total_formatted : '0 menit';
               @endphp
               <div class="mb-3">
                 <label class="form-label">Tgl Down Time (Start)</label>
-                <input type="text" class="form-control" value="{{ $downtimeStartDate }}" disabled>
+                <input type="text" id="rfo_downtime_start" class="form-control" value="{{ $downtimeStartDate }}" disabled>
               </div>
             </div>
             <div class="col-md-6">
                <div class="mb-3">
                 <label class="form-label">Tgl Uptime (End)</label>
-                <input type="text" class="form-control" value="{{ $uptime }}" disabled>
+                <input type="text" id="rfo_uptime_end" class="form-control" value="{{ $uptime }}" disabled>
               </div>
               <div class="mb-3">
                 <label class="form-label">Durasi Downtime (Auto)</label>
-                <input type="text" class="form-control" value="{{ $downtime }}" disabled>
+                <input type="text" id="rfo_downtime_duration" class="form-control" value="{{ $downtime }}" disabled>
               </div>
             </div>
           </div>
@@ -763,6 +768,7 @@ $(document).ready(function() {
     if ($(this).is(':checked')) {
       $('#replyCustomDateRow').slideUp();
       $('#reply_custom_created_at').prop('required', false);
+      $('#reply_custom_created_at').val(''); // Clear value
     } else {
       $('#replyCustomDateRow').slideDown();
       $('#reply_custom_created_at').prop('required', true);
@@ -874,6 +880,10 @@ $(document).ready(function() {
 
   // Handle form submission - modal button
   $('#submitReplyBtn').on('click', function() {
+    const btn = $(this);
+    if (btn.prop('disabled')) return;
+    btn.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Processing...');
+
     const reply = $('#replyInput').val().trim();
     let updateStatus = $('input[name="update_status"]:checked').val();
 
@@ -953,6 +963,71 @@ $(document).ready(function() {
 
     // Intercept submission to check for completion
     if ((updateStatus === 'done' || updateStatus === 'remote_done') && ticketJenis === 'maintenance') {
+      const isCreatedToday = $('#reply_is_created_today').is(':checked');
+      const customCreatedAt = $('#reply_custom_created_at').val();
+      
+      // Capture Visit Schedule fields (at the bottom)
+      const ticketTanggal = $('#ticketTanggal').val();
+      const ticketJam = $('#ticketJam').val();
+      
+      // Calculate display label for Uptime End
+      let finishTimeLabel = "";
+      let endDate;
+
+      // Priority 1: Use Visit Schedule if provided
+      if (ticketTanggal && ticketJam) {
+        endDate = new Date(ticketTanggal + 'T' + ticketJam);
+      } 
+      // Priority 2: Use custom update date if provided
+      else if (!isCreatedToday && customCreatedAt) {
+        endDate = new Date(customCreatedAt);
+      } 
+      // Fallback: Current time
+      else {
+        endDate = new Date();
+      }
+      
+      const day = String(endDate.getDate()).padStart(2, '0');
+      const month = String(endDate.getMonth() + 1).padStart(2, '0');
+      const year = endDate.getFullYear();
+      const hours = String(endDate.getHours()).padStart(2, '0');
+      const mins = String(endDate.getMinutes()).padStart(2, '0');
+      finishTimeLabel = `${day}-${month}-${year} ${hours}:${mins}`;
+      
+      $('#rfo_uptime_end').val(finishTimeLabel);
+
+      // Recalculate duration
+      const startTimeStr = $('#rfo_downtime_start').val();
+      if (startTimeStr && startTimeStr !== '-') {
+        try {
+          const parts = startTimeStr.split(' ');
+          const dateParts = parts[0].split('-');
+          const timeParts = parts[1].split(':');
+          const start = new Date(dateParts[2], dateParts[1]-1, dateParts[0], timeParts[0], timeParts[1]);
+          
+          const diffMs = endDate - start;
+          const diffMins = Math.max(0, Math.floor(diffMs / 60000));
+          
+          let durationLabel = "";
+          if (diffMins >= 1440) {
+              const d = Math.floor(diffMins / 1440);
+              const r = diffMins % 1440;
+              const h = Math.floor(r / 60);
+              const m = r % 60;
+              durationLabel = `${d}d ${h}h ${m}m`;
+          } else if (diffMins >= 60) {
+              const h = Math.floor(diffMins / 60);
+              const m = diffMins % 60;
+              durationLabel = `${h}h ${m}m`;
+          } else {
+              durationLabel = `${diffMins}m`;
+          }
+          $('#rfo_downtime_duration').val(durationLabel);
+        } catch (e) {
+          console.error("Error calculating RFO duration", e);
+        }
+      }
+
       // Hide update modal
       $('#modalAddUpdate').modal('hide');
       
@@ -967,11 +1042,16 @@ $(document).ready(function() {
       return; 
     }
 
-    sendReplyAjax(reply, updateStatus, priority, jenis, effectiveMetode, tanggal, jam, hari, teknisiIds);
+    // Capture date update fields
+    const isCreatedToday = $('#reply_is_created_today').is(':checked');
+    const customCreatedAt = $('#reply_custom_created_at').val();
+
+    sendReplyAjax(reply, updateStatus, priority, jenis, effectiveMetode, tanggal, jam, hari, teknisiIds, isCreatedToday, customCreatedAt);
   });
 
   // Reusable function for sending reply
-  function sendReplyAjax(reply, updateStatus, priority, jenis, metode, tanggal, jam, hari, teknisiIds) {
+  function sendReplyAjax(reply, updateStatus, priority, jenis, metode, tanggal, jam, hari, teknisiIds, isCreatedToday, customCreatedAt) {
+    console.log('Sending Reply:', { isCreatedToday, customCreatedAt, updateStatus });
     const btn = $('#submitReplyBtn');
     btn.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Sending...');
 
@@ -990,7 +1070,10 @@ $(document).ready(function() {
         tanggal_kunjungan: tanggal || null,
         jam: jam || null,
         hari: hari || null,
-        teknisi_ids: teknisiIds || []
+        teknisi_ids: teknisiIds || [],
+        // New fields
+        is_created_today: isCreatedToday ? 'on' : null,
+        custom_created_at: customCreatedAt || null
       },
       success: function(response) {
         $('#replyInput').val('');
@@ -1432,9 +1515,18 @@ $(document).ready(function() {
       $('#modalUpdateRfo').modal('show');
   });
 
+  // Reset pending flag if RFO modal is closed without saving
+  $('#modalUpdateRfo').on('hidden.bs.modal', function () {
+      if (window.pendingReplySubmission) {
+          console.log('RFO modal closed, resetting pending submission flag.');
+          window.pendingReplySubmission = false;
+      }
+  });
+
   // RFO Save Logic
   $('#saveRfoBtn').on('click', function() {
     const btn = $(this);
+    if (btn.prop('disabled')) return;
     btn.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Saving...');
     
     $.ajax({
@@ -1467,7 +1559,11 @@ $(document).ready(function() {
              }
              const effectiveMetode = (metode === 'remote' && updateStatus === 'need_visit') ? 'onsite' : metode;
              
-             sendReplyAjax(reply, updateStatus, priority, jenis, effectiveMetode, tanggal, jam, hari, teknisiIds);
+             // Capture date update fields again (DOM still exists)
+             const isCreatedToday = $('#reply_is_created_today').is(':checked');
+             const customCreatedAt = $('#reply_custom_created_at').val();
+
+             sendReplyAjax(reply, updateStatus, priority, jenis, effectiveMetode, tanggal, jam, hari, teknisiIds, isCreatedToday, customCreatedAt);
              
              // Reset flag
              window.pendingReplySubmission = false;

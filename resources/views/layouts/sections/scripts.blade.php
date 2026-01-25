@@ -285,7 +285,9 @@
 
         // Load sales on page load
         $(document).ready(function() {
-            loadSalesOptions();
+            if ($('#sales').length > 0) {
+                loadSalesOptions();
+            }
         });
 
         $(document).on("click", ".btnDetailCust", function() {

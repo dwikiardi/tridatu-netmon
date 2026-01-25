@@ -22,6 +22,16 @@
           {{-- <h4 class="mb-2">Welcome to {{config('variables.templateName')}}! 👋</h4> --}}
           <p>Please sign-in to your account and start working</p>
 
+          @if ($errors->any())
+            <div class="alert alert-danger">
+              <ul class="mb-0">
+                @foreach ($errors->all() as $error)
+                  <li>{{ $error }}</li>
+                @endforeach
+              </ul>
+            </div>
+          @endif
+
           <form id="formAuthentication" class="mb-3" action="{{route('login.process')}}" method="POST">
             @csrf
             <div class="mb-3">

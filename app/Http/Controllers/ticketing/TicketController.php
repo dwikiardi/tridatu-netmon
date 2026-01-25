@@ -795,64 +795,51 @@ class TicketController extends Controller
 
         // Determine Reply Time (Baseline for schedule validation)
         $replyCreatedAt = now();
-        if (!$request->has('is_created_today') && $request->filled('custom_created_at')) {
-            $replyCreatedAt = \Carbon\Carbon::parse($request->input('custom_created_at'));
-        }
-
-        // Additional guard: when tanggal/jam provided in any flow, enforce baseline against REPPLY time (or strictly previous logic?)
-        // The user wants to allow backdated reply so backdated schedule is valid.
-        // So baseline should be the Effective Reply Time, OR the previous state if Reply Time is also previous.
-        // Actually, logic: Schedule cannot be before the "Point of Truth".
-        // If we backdate the Reply to Jan 24, then Jan 24 schedule is valid.
-        // So validation should check against $replyCreatedAt.
-        // HOWEVER, it also shouldn't be before the Ticket Creation strictly? (Unless Ticket is also backdated, which it is in DB).
         
+        // If "custom_created_at" has a value, use it (we rely on frontend to clear it if "Today" is checked)
+        if ($request->filled('custom_created_at')) {
+            $parsedC = \Carbon\Carbon::parse($request->input('custom_created_at'));
+            // If parsed correctly
+            if ($parsedC) {
+                $replyCreatedAt = $parsedC;
+            }
+        }
+                
+        // Debugging / fail-safe
+        // If we really wanted custom date but fallback happened, we have an issue.
+        // Let's assume the user intent: if custom_created_at is present, use it?
+        // But if they check "Today" and leave the hidden input filled (e.g. from previous interaction), we should prioritize "Today".
+        // So checking !has('is_created_today') is correct for HTML forms.
+
+        // Allow SAME minute updates (lte instead of lt?) 
+        // If update is 11:45:00 and schedule is 11:45:00.
+        // Schedule >= Reply.
+        // 11:45 >= 11:45.
+        // So Schedule < Reply is False.
+        // $selectedDT->lt($replyCreatedAt) is correct.
+
         if (!empty($validated['tanggal_kunjungan']) || !empty($validated['jam'])) {
-            // Baseline 1: Ticket Creation
-            $baseline = $ticket->created_at; 
-            
-            // Baseline 2: Last Reply (if strictly enforcing sequential updates? 
-            // If user inserts a reply in the past, effectively branching history? 
-            // Let's assume sequential: cannot verify against future replies if inserting in past.
-            // But usually we just want to ensure Schedule >= This Reply Effective Date (or slightly before? No, usually schedule is future/same as report).
-            // "Perlu Kunjungan" means Future/Now relative to Report.
-            // "Done" means Past relative to Report.
-            // But validated['tanggal_kunjungan'] is usually meant for "Next Visit".
-            // If status is "Done" or "On Progress", maybe date is meaningless?
-            
-            // If status is Need Visit, Schedule must be >= Reply Date.
+            // ...
             if (($updateStatus === 'need_visit' || $updateStatus === 'pending') && isset($validated['tanggal_kunjungan'])) {
                 $selDate = $validated['tanggal_kunjungan'];
                 $selTime = $validated['jam'] ?? '00:00';
                 $selectedDT = \Carbon\Carbon::createFromFormat('Y-m-d H:i', $selDate.' '.$selTime);
                 
+                // Compare timestamps
                 if ($selectedDT->lt($replyCreatedAt)) {
-                     // Allow slight tolerance? No.
                      return response()->json([
-                        'message' => 'Jadwal kunjungan (Need Visit) tidak boleh sebelum Tanggal Update.',
+                        'message' => 'Jadwal kunjungan (Need Visit) tidak boleh sebelum Tanggal Update. (Update: ' . $replyCreatedAt->format('d-m-Y H:i') . ', Jadwal: ' . $selectedDT->format('d-m-Y H:i') . ')',
                         'status' => false
                     ], 422);
                 }
             }
         }
 
-        // Create the Reply
-        $reply = TicketReply::create([
-            'ticket_id' => $ticket->id,
-            'user_id' => $user->id,
-            'reply' => $validated['reply'],
-            'update_status' => $updateStatus,
-            'tanggal_kunjungan' => $validated['tanggal_kunjungan'] ?? null,
-            'jam_kunjungan' => $validated['jam'] ?? null,
-            // 'created_at' => $replyCreatedAt, // Not mass assignable usually
-        ]);
+        // Create the Reply (Moved to end of method for consolidation)
 
-        // Manually update timestamp if custom
-        if (!$request->has('is_created_today') && $request->filled('custom_created_at')) {
-            $reply->created_at = $replyCreatedAt;
-            $reply->updated_at = $replyCreatedAt;
-            $reply->save();
-        }
+
+        // Manual timestamp override will happen after the consolidated creation below.
+
 
         // Update Ticket Updated At as well?
         // Usually Ticket Updated At should reflect the entry time of the latest info. 
@@ -955,9 +942,9 @@ class TicketController extends Controller
             }
         }
 
-        // Create reply
+        // Create consolidated reply
         $replyMetode = $updateData['metode_penanganan'] ?? $incomingMetode;
-        TicketReply::create([
+        $reply = TicketReply::create([
             'ticket_id' => $validated['ticket_id'],
             'user_id' => $user->id,
             'reply' => $validated['reply'],
@@ -969,6 +956,13 @@ class TicketController extends Controller
             'teknisi_id' => $teknisiIds->first() ?? null,
             'teknisi_ids' => $teknisiIds->isNotEmpty() ? $teknisiIds->values()->all() : null,
         ]);
+
+        // Manually override timestamps if custom date is provided
+        if ($request->filled('custom_created_at')) {
+            $reply->created_at = $replyCreatedAt;
+            $reply->updated_at = $replyCreatedAt;
+            $reply->save();
+        }
 
         $this->recalculateSla($ticket);
 
