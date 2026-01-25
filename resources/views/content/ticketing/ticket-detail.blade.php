@@ -438,6 +438,7 @@ $ticketNo = "TDN-{$tanggal}-{$jam}-{$no}";
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <hr class="my-0">
+      <div class="modal-body">
         <form id="replyForm">
           <!-- Update Date Flexibility -->
           <div class="mb-3">
