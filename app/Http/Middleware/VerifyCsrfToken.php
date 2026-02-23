@@ -12,6 +12,6 @@ class VerifyCsrfToken extends Middleware
      * @var array<int, string>
      */
     protected $except = [
-        //
+        'api/waha/webhook', // Disable CSRF for WAHA webhook
     ];
 }

@@ -22,5 +22,10 @@ class AppServiceProvider extends ServiceProvider
   public function boot(): void
   {
     Customer::observe(CustomerObserver::class);
+    \App\Models\Ticket::observe(\App\Observers\TicketObserver::class);
+
+    if($this->app->environment('production') || strpos(request()->getHost(), 'ngrok') !== false) {
+        \Illuminate\Support\Facades\URL::forceScheme('https');
+    }
   }
 }

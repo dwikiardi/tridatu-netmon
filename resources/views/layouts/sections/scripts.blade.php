@@ -519,6 +519,12 @@
                 { "data": "email" },
                 { "data": "jabatan" },
                 {
+                    "data": "phone",
+                    "render": function(data) {
+                        return data ? `<span class="text-success"><i class="bx bxl-whatsapp"></i> ${data}</span>` : '<span class="text-muted">-</span>';
+                    }
+                },
+                {
                     "data": null,
                     "render": function(data, type, row) {
                         return `<button type="button" class="btn btn-primary btnDetailUser" data-bs-toggle="modal" data-bs-target="#modalDetailUser" data-id="${row.id}"> <i class='bx bx-info-square'></i> </button>
@@ -557,6 +563,7 @@
                         <p><b>Username:</b> ${response.username ?? '-'}</p>
                         <p><b>Email:</b> ${response.email ?? '-'}</p>
                         <p><b>Jabatan:</b> ${response.jabatan ?? '-'}</p>
+                        <p><b>No. HP WA:</b> ${response.phone ? `<span class="text-success"><i class="bx bxl-whatsapp"></i> ${response.phone}</span>` : '-'}</p>
                     `);
                 },
                 error: function() {
@@ -579,6 +586,7 @@
                     $("#username").val(response.username);
                     $("#email").val(response.email);
                     $("#jabatan").val(response.jabatan);
+                    $("#phone").val(response.phone ?? '');
                     $("#password").val(''); // Kosongkan password
                 },
                 error: function() {
@@ -599,6 +607,7 @@
                 username: $('#username').val(),
                 email: $('#email').val(),
                 jabatan: $('#jabatan').val(),
+                phone: $('#phone').val(),
                 password: $('#password').val(),
                 _token: $('meta[name="csrf-token"]').attr('content')
             };

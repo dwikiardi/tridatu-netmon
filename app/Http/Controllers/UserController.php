@@ -19,7 +19,7 @@ class UserController extends Controller
         $start = $request->input('start', 0);
         $length = $request->input('length', 10);
 
-        $query = User::select('id', 'name', 'username', 'email', 'jabatan');
+        $query = User::select('id', 'name', 'username', 'email', 'jabatan', 'phone');
 
         $recordsTotal = $query->count();
 
@@ -58,7 +58,7 @@ class UserController extends Controller
     public function update(Request $request)
     {
         $user = User::findOrFail($request->id);
-        $data = $request->only(['name', 'username', 'email', 'jabatan']);
+        $data = $request->only(['name', 'username', 'email', 'jabatan', 'phone']);
         if ($request->password) {
             $data['password'] = Hash::make($request->password);
         }
@@ -77,11 +77,12 @@ class UserController extends Controller
     {
         $user = User::findOrFail($request->id);
         return response()->json([
-            'id' => $user->id,
-            'name' => $user->name,
+            'id'       => $user->id,
+            'name'     => $user->name,
             'username' => $user->username,
-            'email' => $user->email,
-            'jabatan' => $user->jabatan,
+            'email'    => $user->email,
+            'jabatan'  => $user->jabatan,
+            'phone'    => $user->phone,
         ]);
     }
 }
