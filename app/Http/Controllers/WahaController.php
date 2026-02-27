@@ -371,6 +371,17 @@ class WahaController extends Controller
             }
         }
 
+        // Attempt to inherit teknisi info from last reply or ticket 
+        $lastReply = TicketReply::where('ticket_id', $ticket->id)
+            ->where(function($q) {
+                $q->whereNotNull('teknisi_id')->orWhereNotNull('teknisi_ids');
+            })
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        $inheritedTeknisiId = $lastReply ? $lastReply->teknisi_id : $ticket->teknisi_id;
+        $inheritedTeknisiIds = $lastReply ? $lastReply->teknisi_ids : null;
+
         // Create Reply
         TicketReply::create([
             'ticket_id'         => $ticket->id,
@@ -381,6 +392,8 @@ class WahaController extends Controller
             'metode_penanganan' => $metode ? strtolower($metode) : null,
             'tanggal_kunjungan' => $tanggal,
             'jam_kunjungan'     => $jam,
+            'teknisi_id'        => $inheritedTeknisiId,
+            'teknisi_ids'       => $inheritedTeknisiIds,
         ]);
 
         // Update Ticket status
@@ -439,6 +452,7 @@ class WahaController extends Controller
         }
 
         // Check if this user is already in the list
+        $isFirst = count($existingNames) === 0;
         if (in_array($user->name, $existingNames)) {
             $this->waha->sendMessage($replyTo, "ℹ️ *{$user->name}* sudah terdaftar di Ticket #{$ticketId}.\nTeknisi saat ini: " . implode(', ', $existingNames));
             return response()->json(['status' => 'already claimed']);
@@ -446,13 +460,50 @@ class WahaController extends Controller
 
         // Add this user to the list
         $existingNames[] = $user->name;
+
+        // Collect teknisi IDs for visit counting
+        $teknisiIds = collect();
+
+        // Inherit past teknisi ids from last reply if any
+        $lastReply = TicketReply::where('ticket_id', $ticket->id)
+            ->where(function($q) {
+                $q->whereNotNull('teknisi_id')->orWhereNotNull('teknisi_ids');
+            })->latest()->first();
+            
+        if ($lastReply) {
+            if (!empty($lastReply->teknisi_ids)) $teknisiIds = collect($lastReply->teknisi_ids);
+            elseif (!empty($lastReply->teknisi_id)) $teknisiIds->push($lastReply->teknisi_id);
+        } elseif ($ticket->teknisi_id) {
+            $teknisiIds->push($ticket->teknisi_id);
+        }
+
+        $teknisiIds->push($user->id);
+
+        if (!empty($colleagues)) {
+            $colleagueNames = array_map('trim', explode(',', $colleagues));
+            foreach ($colleagueNames as $cName) {
+                $cUser = User::where('name', 'like', "%{$cName}%")->first();
+                if ($cUser) {
+                    $teknisiIds->push($cUser->id);
+                    $actualName = $cUser->name;
+                } else {
+                    $actualName = $cName; // Fallback
+                }
+                if (!in_array($actualName, $existingNames)) {
+                    $existingNames[] = $actualName;
+                }
+            }
+        }
+
         $allNames = implode(', ', $existingNames);
+        $teknisiIdsArray = $teknisiIds->unique()->values()->all();
+        $mainTeknisiId = $teknisiIdsArray[0] ?? $user->id;
 
         // Update ticket — first person to claim changes status to on progress
         if ($ticket->status === 'open' || $ticket->status === 'need visit') {
             $ticket->status = 'on progress';
         }
-        $ticket->teknisi_id = $user->id; // main teknisi = last to join (or first, modify if needed)
+        $ticket->teknisi_id = $mainTeknisiId; 
         $ticket->pic_teknisi = $allNames;
         $ticket->save();
 
@@ -463,6 +514,8 @@ class WahaController extends Controller
             'reply'        => "{$user->name} bergabung menangani tiket ini. Tim: {$allNames}",
             'role'         => $user->jabatan ?? 'teknisi',
             'update_status'=> 'on_progress',
+            'teknisi_id'   => $mainTeknisiId,
+            'teknisi_ids'  => count($teknisiIdsArray) > 0 ? $teknisiIdsArray : null,
         ]);
 
         $isFirst = count($existingNames) === 1;
