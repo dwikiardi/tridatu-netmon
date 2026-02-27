@@ -218,15 +218,25 @@ class ReportController extends Controller
             $query->where('tickets.status', $status);
         }
 
-        // Filter by date range
-        $dateFrom = $request->input('date_from');
-        $dateTo = $request->input('date_to');
-
-        if (!empty($dateFrom)) {
-            $query->whereDate('tickets.tanggal_kunjungan', '>=', $dateFrom);
-        }
-        if (!empty($dateTo)) {
-            $query->whereDate('tickets.tanggal_kunjungan', '<=', $dateTo);
+        if (!empty($dateFrom) || !empty($dateTo)) {
+            $query->where(function($q) use ($dateFrom, $dateTo) {
+                // Match ticket's main schedule
+                $q->where(function($sub) use ($dateFrom, $dateTo) {
+                    if ($dateFrom) $sub->whereDate('tickets.tanggal_kunjungan', '>=', $dateFrom);
+                    if ($dateTo) $sub->whereDate('tickets.tanggal_kunjungan', '<=', $dateTo);
+                })->orWhereHas('replies', function($sub) use ($dateFrom, $dateTo) {
+                    // OR match any reply's visit date or created_at
+                    $sub->where(function($inner) use ($dateFrom, $dateTo) {
+                        $inner->whereNotNull('tanggal_kunjungan');
+                        if ($dateFrom) $inner->whereDate('tanggal_kunjungan', '>=', $dateFrom);
+                        if ($dateTo) $inner->whereDate('tanggal_kunjungan', '<=', $dateTo);
+                    })->orWhere(function($inner) use ($dateFrom, $dateTo) {
+                        $inner->whereNull('tanggal_kunjungan');
+                        if ($dateFrom) $inner->whereDate('created_at', '>=', $dateFrom);
+                        if ($dateTo) $inner->whereDate('created_at', '<=', $dateTo);
+                    });
+                });
+            });
         }
 
         // Filter pencarian
@@ -340,14 +350,23 @@ class ReportController extends Controller
         });
             
         if ($dateFrom || $dateTo) {
-            $repliesQuery->whereHas('ticket', function($q) use ($dateFrom, $dateTo) {
-                if ($dateFrom) $q->whereDate('tanggal_kunjungan', '>=', $dateFrom);
-                if ($dateTo) $q->whereDate('tanggal_kunjungan', '<=', $dateTo);
+            // Filter by the actual visit date in the reply (tanggal_kunjungan or created_at)
+            $repliesQuery->where(function($q) use ($dateFrom, $dateTo) {
+                $q->where(function($sub) use ($dateFrom, $dateTo) {
+                    $sub->whereNotNull('tanggal_kunjungan');
+                    if ($dateFrom) $sub->whereDate('tanggal_kunjungan', '>=', $dateFrom);
+                    if ($dateTo) $sub->whereDate('tanggal_kunjungan', '<=', $dateTo);
+                })->orWhere(function($sub) use ($dateFrom, $dateTo) {
+                    $sub->whereNull('tanggal_kunjungan');
+                    if ($dateFrom) $sub->whereDate('created_at', '>=', $dateFrom);
+                    if ($dateTo) $sub->whereDate('created_at', '<=', $dateTo);
+                });
             });
         }
 
         $allReplies = $repliesQuery->get();
         $teknisiVisitCounts = [];
+        $uniqueVisits = []; // track unique visits: technican_id + ticket_id + date
 
         foreach ($allReplies as $reply) {
             $ids = [];
@@ -357,8 +376,18 @@ class ReportController extends Controller
                 $ids = [$reply->teknisi_id];
             }
 
+            // Determine visit date for unique tracking
+            $visitDate = $reply->tanggal_kunjungan 
+                ? (\Carbon\Carbon::parse($reply->tanggal_kunjungan)->format('Y-m-d')) 
+                : $reply->created_at->format('Y-m-d');
+
             foreach ($ids as $id) {
-                $teknisiVisitCounts[$id] = ($teknisiVisitCounts[$id] ?? 0) + 1;
+                // Count unique: one visit per technician per ticket per day
+                $visitKey = $id . '_' . $reply->ticket_id . '_' . $visitDate;
+                if (!isset($uniqueVisits[$visitKey])) {
+                    $teknisiVisitCounts[$id] = ($teknisiVisitCounts[$id] ?? 0) + 1;
+                    $uniqueVisits[$visitKey] = true;
+                }
             }
         }
 
@@ -733,11 +762,25 @@ class ReportController extends Controller
         if (!empty($jenis)) {
             $query->where('jenis', $jenis);
         }
-        if ($dateFrom) {
-            $query->whereDate('tanggal_kunjungan', '>=', $dateFrom);
-        }
-        if ($dateTo) {
-            $query->whereDate('tanggal_kunjungan', '<=', $dateTo);
+        if (!empty($dateFrom) || !empty($dateTo)) {
+            $query->where(function($q) use ($dateFrom, $dateTo) {
+                // Match ticket's main schedule
+                $q->where(function($sub) use ($dateFrom, $dateTo) {
+                    if ($dateFrom) $sub->whereDate('tanggal_kunjungan', '>=', $dateFrom);
+                    if ($dateTo) $sub->whereDate('tanggal_kunjungan', '<=', $dateTo);
+                })->orWhereHas('replies', function($sub) use ($dateFrom, $dateTo) {
+                    // OR match any reply's visit date or created_at
+                    $sub->where(function($inner) use ($dateFrom, $dateTo) {
+                        $inner->whereNotNull('tanggal_kunjungan');
+                        if ($dateFrom) $inner->whereDate('tanggal_kunjungan', '>=', $dateFrom);
+                        if ($dateTo) $inner->whereDate('tanggal_kunjungan', '<=', $dateTo);
+                    })->orWhere(function($inner) use ($dateFrom, $dateTo) {
+                        $inner->whereNull('tanggal_kunjungan');
+                        if ($dateFrom) $inner->whereDate('created_at', '>=', $dateFrom);
+                        if ($dateTo) $inner->whereDate('created_at', '<=', $dateTo);
+                    });
+                });
+            });
         }
 
         $data = $query->with(['replies' => function($q) {
@@ -1008,11 +1051,25 @@ class ReportController extends Controller
         if (!empty($jenis)) {
             $query->where('jenis', $jenis);
         }
-        if ($dateFrom) {
-            $query->whereDate('tanggal_kunjungan', '>=', $dateFrom);
-        }
-        if ($dateTo) {
-            $query->whereDate('tanggal_kunjungan', '<=', $dateTo);
+        if (!empty($dateFrom) || !empty($dateTo)) {
+            $query->where(function($q) use ($dateFrom, $dateTo) {
+                // Match ticket's main schedule
+                $q->where(function($sub) use ($dateFrom, $dateTo) {
+                    if ($dateFrom) $sub->whereDate('tanggal_kunjungan', '>=', $dateFrom);
+                    if ($dateTo) $sub->whereDate('tanggal_kunjungan', '<=', $dateTo);
+                })->orWhereHas('replies', function($sub) use ($dateFrom, $dateTo) {
+                    // OR match any reply's visit date or created_at
+                    $sub->where(function($inner) use ($dateFrom, $dateTo) {
+                        $inner->whereNotNull('tanggal_kunjungan');
+                        if ($dateFrom) $inner->whereDate('tanggal_kunjungan', '>=', $dateFrom);
+                        if ($dateTo) $inner->whereDate('tanggal_kunjungan', '<=', $dateTo);
+                    })->orWhere(function($inner) use ($dateFrom, $dateTo) {
+                        $inner->whereNull('tanggal_kunjungan');
+                        if ($dateFrom) $inner->whereDate('created_at', '>=', $dateFrom);
+                        if ($dateTo) $inner->whereDate('created_at', '<=', $dateTo);
+                    });
+                });
+            });
         }
 
         $data = $query->with(['replies' => function($q) {
