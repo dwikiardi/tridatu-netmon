@@ -903,6 +903,7 @@ $(document).ready(function() {
 
     if (!reply) {
       alert('Please enter a comment');
+      btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
       return;
     }
 
@@ -926,37 +927,44 @@ $(document).ready(function() {
       // Kasus konversi: hanya wajib tanggal & jam, teknisi optional
       if (!tanggal) {
         alert('Tanggal kunjungan harus diisi untuk Perlu Kunjungan');
+        btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
         return;
       }
       if (!jam) {
         alert('Jam kunjungan harus diisi untuk Perlu Kunjungan');
+        btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
         return;
       }
       // Enforce baseline: not before ticket created or last update
       const chosenDT_remote = new Date(tanggal + 'T' + jam);
       if (chosenDT_remote < latestUpdateDateTime) {
         alert('Tanggal/jam kunjungan tidak boleh kurang dari update sebelumnya');
+        btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
         return;
       }
       // teknisiId boleh kosong
     } else if ((ticketJenis === 'maintenance' || ticketJenis === 'installasi' || ticketJenis === 'survey') && effectiveMetode === 'onsite' && updateStatus !== 'pending') {
       if (!tanggal) {
         alert('Tanggal kunjungan harus diisi untuk metode onsite');
+        btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
         return;
       }
       if (!jam) {
         alert('Jam kunjungan harus diisi untuk metode onsite');
+        btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
         return;
       }
       // Enforce baseline: not before ticket created or last update
       const chosenDT = new Date(tanggal + 'T' + jam);
       if (chosenDT < latestUpdateDateTime) {
         alert('Tanggal/jam kunjungan tidak boleh kurang dari update sebelumnya');
+        btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
         return;
       }
       // Teknisi hanya wajib untuk On Progress Kunjungan
       if (updateStatus === 'on_progress' && (!teknisiIds || teknisiIds.length === 0)) {
         alert('Teknisi harus dipilih untuk status On Progress Kunjungan');
+        btn.prop('disabled', false).html('<i class="bx bx-send"></i> Send Update');
         return;
       }
     }

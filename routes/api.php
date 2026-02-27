@@ -19,3 +19,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 });
 
 Route::post('/waha/webhook', [\App\Http\Controllers\WahaController::class, 'webhook']);
+
+// Asset Management API
+Route::middleware('internal.api')->group(function () {
+    Route::get('/v1/customers', [\App\Http\Controllers\Api\AssetApiController::class, 'getCustomers']);
+    Route::get('/v1/staff', [\App\Http\Controllers\Api\AssetApiController::class, 'getStaff']);
+});

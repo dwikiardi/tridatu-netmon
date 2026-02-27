@@ -1117,8 +1117,16 @@ $(document).ready(function() {
 
   // Save button
   $('#btnSave').click(function() {
+    const btn = $(this);
+    if (btn.prop('disabled')) return;
+
     // Validasi sederhana di frontend
     const jenisVal = $('#jenis').val();
+    if (!jenisVal) {
+      alert('Pilih Jenis Ticket terlebih dahulu');
+      return;
+    }
+
     if (jenisVal === 'survey') {
       const surveyTipeVal = $('input[name="survey_tipe"]:checked').val();
       if (!surveyTipeVal) {
@@ -1126,6 +1134,8 @@ $(document).ready(function() {
         return;
       }
     }
+
+    btn.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Saving...');
 
     const formData = $('#formTicket').serialize();
     const url = currentAction === 'add' ? '{{ url("ticketing/store") }}' : '{{ url("ticketing/update") }}';
@@ -1158,6 +1168,9 @@ $(document).ready(function() {
               return 'Terjadi kesalahan saat menyimpan ticket';
             })();
         alert('Error: ' + msg);
+      },
+      complete: function() {
+        btn.prop('disabled', false).html('Save');
       }
     });
   });

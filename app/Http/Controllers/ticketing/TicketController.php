@@ -235,6 +235,24 @@ class TicketController extends Controller
         $data['status'] = 'open';
         $data['hari'] = '-';
 
+        // Idempotency: Avoid double ticket within 10 seconds
+        $existing = Ticket::where('created_by', $user->id)
+            ->where('jenis', $jenis === 'maintenance-komplain' ? 'maintenance' : ($jenis === 'survey' ? 'survey' : 'installasi'))
+            ->where('created_at', '>=', now()->subSeconds(10))
+            ->first();
+
+        if ($existing) {
+            // Check content to be sure
+            $match = false;
+            if ($jenis === 'maintenance-komplain' && $existing->cid == ($validated['cid'] ?? null)) $match = true;
+            if ($jenis === 'survey' && $existing->kendala == ($validated['survey_deskripsi'] ?? null)) $match = true;
+            if ($jenis === 'installasi' && $existing->kendala == ($validated['install_deskripsi'] ?? null)) $match = true;
+
+            if ($match) {
+                return response()->json(['message' => 'Ticket duplikat terdeteksi.'], 422);
+            }
+        }
+
         // Type-specific handling
         if ($jenis === 'maintenance-komplain') {
             // Maintenance & Komplain: Only customer + kendala
@@ -713,6 +731,17 @@ class TicketController extends Controller
                 'message' => 'Ticket sudah selesai dan tidak dapat di-update lagi.',
                 'status' => false
             ], 422);
+        }
+
+        // Idempotency: Avoid double reply within 10 seconds
+        $existingReply = TicketReply::where('ticket_id', $ticket->id)
+            ->where('user_id', $user->id)
+            ->where('reply', $validated['reply'])
+            ->where('created_at', '>=', now()->subSeconds(10))
+            ->first();
+
+        if ($existingReply) {
+            return response()->json(['message' => 'Reply duplikat terdeteksi.'], 422);
         }
 
         // Update ticket fields if provided
