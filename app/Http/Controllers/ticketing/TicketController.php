@@ -1115,10 +1115,15 @@ class TicketController extends Controller
         // If tanggal_kunjungan is NULL (e.g. on_progress for survey/installasi without prior schedule),
         // fallback to created_at as the visit date — consistent with ReportController logic.
         foreach ($replies as $reply) {
-            $replyTeknisiIds = collect($reply['teknisi_ids'] ?? [])->filter()->values();
+            // Cast semua ID ke integer (JSON decode bisa menghasilkan string)
+            $rawIds = $reply['teknisi_ids'] ?? [];
+            $replyTeknisiIds = collect(is_array($rawIds) ? $rawIds : [])
+                ->filter()
+                ->map(fn($id) => (int)$id)
+                ->values();
 
             if ($replyTeknisiIds->isEmpty() && $reply['teknisi_id']) {
-                $replyTeknisiIds = collect([$reply['teknisi_id']]);
+                $replyTeknisiIds = collect([(int)$reply['teknisi_id']]);
             }
 
             // Skip jika tidak ada teknisi sama sekali
@@ -1156,22 +1161,24 @@ class TicketController extends Controller
                     }
                     
                     // Only increment if this date hasn't been counted for this technician yet
+                    // Gunakan DateTimeInterface agar Carbon object juga terdeteksi
                     $dateObj = $reply['tanggal_kunjungan'];
-                    $date = $dateObj instanceof \DateTime
-                        ? $dateObj->format('Y-m-d')
-                        : (is_string($rawDate) ? substr($rawDate, 0, 10) : date('Y-m-d'));
+                    if ($dateObj instanceof \DateTimeInterface) {
+                        $date = $dateObj->format('Y-m-d');
+                    } else {
+                        $date = substr((string)$rawDate, 0, 10);
+                    }
                     
-                    if (!in_array($date, $teknisiHistory[$key]['visited_dates'])) {
+                    if (!empty($date) && !in_array($date, $teknisiHistory[$key]['visited_dates'])) {
                         $teknisiHistory[$key]['visit_count']++;
                         $teknisiHistory[$key]['visited_dates'][] = $date;
                     }
                     
                     // Always update last visit info to the latest one
-                    $displayDate = $dateObj instanceof \DateTime
-                        ? $dateObj->format('d-m-Y')
-                        : \Carbon\Carbon::parse($date)->format('d-m-Y');
-                    $teknisiHistory[$key]['last_visit'] = $displayDate;
-                    $teknisiHistory[$key]['last_visit_date'] = strtotime($date);
+                    if (!empty($date)) {
+                        $teknisiHistory[$key]['last_visit'] = \Carbon\Carbon::parse($date)->format('d-m-Y');
+                        $teknisiHistory[$key]['last_visit_date'] = strtotime($date);
+                    }
                 }
             }
         }
