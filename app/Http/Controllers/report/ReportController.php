@@ -336,9 +336,26 @@ class ReportController extends Controller
         $dateTo = $request->input('date_to');
 
         // Base Query for Summary
+        // Ticket survey/installasi sering tidak punya tanggal_kunjungan saat dibuat,
+        // sehingga filter by tanggal_kunjungan saja akan mengecualikan mereka.
+        // Solusi: gunakan created_at sebagai fallback jika tanggal_kunjungan NULL.
         $query = Ticket::query();
-        if ($dateFrom) $query->whereDate('tanggal_kunjungan', '>=', $dateFrom);
-        if ($dateTo) $query->whereDate('tanggal_kunjungan', '<=', $dateTo);
+        if ($dateFrom || $dateTo) {
+            $query->where(function($q) use ($dateFrom, $dateTo) {
+                // Match by tanggal_kunjungan jika ada
+                $q->where(function($sub) use ($dateFrom, $dateTo) {
+                    $sub->whereNotNull('tanggal_kunjungan');
+                    if ($dateFrom) $sub->whereDate('tanggal_kunjungan', '>=', $dateFrom);
+                    if ($dateTo)   $sub->whereDate('tanggal_kunjungan', '<=', $dateTo);
+                })
+                // Fallback ke created_at untuk ticket tanpa tanggal_kunjungan (survey/installasi)
+                ->orWhere(function($sub) use ($dateFrom, $dateTo) {
+                    $sub->whereNull('tanggal_kunjungan');
+                    if ($dateFrom) $sub->whereDate('created_at', '>=', $dateFrom);
+                    if ($dateTo)   $sub->whereDate('created_at', '<=', $dateTo);
+                });
+            });
+        }
 
         $totalTickets = (clone $query)->count();
         $completedTickets = (clone $query)->where('status', 'selesai')->count();

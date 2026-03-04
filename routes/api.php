@@ -24,4 +24,5 @@ Route::post('/waha/webhook', [\App\Http\Controllers\WahaController::class, 'webh
 Route::middleware('internal.api')->group(function () {
     Route::get('/v1/customers', [\App\Http\Controllers\Api\AssetApiController::class, 'getCustomers']);
     Route::get('/v1/staff', [\App\Http\Controllers\Api\AssetApiController::class, 'getStaff']);
+    Route::post('/v1/login', [\App\Http\Controllers\Api\AssetApiController::class, 'login']);
 });

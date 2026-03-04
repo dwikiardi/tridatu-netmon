@@ -1111,7 +1111,9 @@ class TicketController extends Controller
             ];
         }
 
-        // Then add/update from replies that have teknisi_ids and tanggal_kunjungan (actual visits)
+        // Then add/update from replies that have teknisi_ids (actual visits)
+        // If tanggal_kunjungan is NULL (e.g. on_progress for survey/installasi without prior schedule),
+        // fallback to created_at as the visit date — consistent with ReportController logic.
         foreach ($replies as $reply) {
             $replyTeknisiIds = collect($reply['teknisi_ids'] ?? [])->filter()->values();
 
@@ -1119,8 +1121,22 @@ class TicketController extends Controller
                 $replyTeknisiIds = collect([$reply['teknisi_id']]);
             }
 
-            if ($replyTeknisiIds->isEmpty() || empty($reply['tanggal_kunjungan'])) {
+            // Skip jika tidak ada teknisi sama sekali
+            if ($replyTeknisiIds->isEmpty()) {
                 continue;
+            }
+
+            // Gunakan tanggal_kunjungan jika ada, fallback ke created_at
+            $rawDate = $reply['tanggal_kunjungan'];
+            if (empty($rawDate)) {
+                // Fallback: gunakan created_at sebagai tanggal kunjungan
+                // created_at di $replies sudah diformat sebagai string 'd-m-Y H:i'
+                // Kita perlu parse ke Y-m-d
+                try {
+                    $rawDate = \Carbon\Carbon::createFromFormat('d-m-Y H:i', $reply['created_at'])->format('Y-m-d');
+                } catch (\Exception $e) {
+                    $rawDate = date('Y-m-d'); // last resort fallback
+                }
             }
 
             foreach ($replyTeknisiIds as $tid) {
@@ -1140,9 +1156,10 @@ class TicketController extends Controller
                     }
                     
                     // Only increment if this date hasn't been counted for this technician yet
-                    // Ensure we work with string Y-m-d for checking
                     $dateObj = $reply['tanggal_kunjungan'];
-                    $date = $dateObj instanceof \DateTime ? $dateObj->format('Y-m-d') : substr((string)$dateObj, 0, 10);
+                    $date = $dateObj instanceof \DateTime
+                        ? $dateObj->format('Y-m-d')
+                        : (is_string($rawDate) ? substr($rawDate, 0, 10) : date('Y-m-d'));
                     
                     if (!in_array($date, $teknisiHistory[$key]['visited_dates'])) {
                         $teknisiHistory[$key]['visit_count']++;
@@ -1150,9 +1167,11 @@ class TicketController extends Controller
                     }
                     
                     // Always update last visit info to the latest one
-                    // Format for display: d-m-Y
-                    $teknisiHistory[$key]['last_visit'] = $dateObj instanceof \DateTime ? $dateObj->format('d-m-Y') : $date;
-                    $teknisiHistory[$key]['last_visit_date'] = $dateObj instanceof \DateTime ? $dateObj->getTimestamp() : strtotime($date);
+                    $displayDate = $dateObj instanceof \DateTime
+                        ? $dateObj->format('d-m-Y')
+                        : \Carbon\Carbon::parse($date)->format('d-m-Y');
+                    $teknisiHistory[$key]['last_visit'] = $displayDate;
+                    $teknisiHistory[$key]['last_visit_date'] = strtotime($date);
                 }
             }
         }
