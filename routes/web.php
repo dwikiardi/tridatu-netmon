@@ -50,6 +50,7 @@ use App\Http\Controllers\ticketing\TicketController;
 use App\Http\Controllers\report\ReportController;
 use App\Http\Controllers\authentications\Login as Login;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\CustomerSyncController;
 
 // // Menampilkan halaman login
 // Route::get('/login', [Auth::class, 'showLogin'])->name('login');
@@ -123,7 +124,11 @@ Route::middleware(['auth'])->group(function () {
      Route::get('/user/detail', [UserController::class, 'detail'])->name('detail-user');
      Route::post('/user/store', [UserController::class, 'store'])->name('store-user');
      Route::put('/user/update', [UserController::class, 'update'])->name('update-user');
-     Route::delete('/user/delete', [UserController::class, 'destroy'])->name('delete-user');
+     Route::get('/user/delete', [UserController::class, 'destroy'])->name('delete-user');
+     
+     // Asset Management Sync Integration
+     Route::get('/customers/{externalId}/assets', [CustomerSyncController::class, 'assetsByExternalId']);
+     
     //logout
     Route::post('/auth/logout', [Login::class, 'logout'])->name('logout');
 });

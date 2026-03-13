@@ -69,9 +69,9 @@
     <table class="table" id="tableTicket">
       <thead>
         <tr>
-          <th>Ticket No</th>
+          <th class="sticky-col-1">Ticket No</th>
           <th>CID</th>
-          <th>Nama Customer</th>
+          <th class="sticky-col-2">Nama Customer</th>
           <th>Jenis</th>
           <th>Metode</th>
           <th>Priority</th>
@@ -85,6 +85,13 @@
       <tbody class="table-border-bottom-0">
       </tbody>
     </table>
+  </div>
+</div>
+
+<!-- Floating Horizontal Scrollbar -->
+<div id="floatingScrollbarWrapTicket">
+  <div id="floatingScrollbarInnerTicket">
+    <div id="floatingScrollbarContentTicket"></div>
   </div>
 </div>
 
@@ -518,6 +525,71 @@
   .select2-container--default .select2-selection--single .select2-selection__arrow {
     height: 36px;
   }
+
+  /* Sticky Columns - Ticket No & Nama Customer */
+  .sticky-col-1 {
+    position: sticky !important;
+    left: 0;
+    z-index: 2;
+    background-color: #fff !important;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+  }
+  .sticky-col-2 {
+    position: sticky !important;
+    left: 200px; /* Ticket No (110px) + CID (90px) */
+    z-index: 2;
+    background-color: #fff !important;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+  }
+
+  /* Header Sticky Column (Corner) */
+  .dataTables_scrollHead th.sticky-col-1,
+  .dataTables_scrollHead th.sticky-col-2 {
+    z-index: 5 !important;
+    background-color: #f8f9fa !important;
+  }
+
+  /* Sticky thead (DataTables scrollX pakai .dataTables_scrollHead) */
+  #tableTicket_wrapper .dataTables_scrollHead {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #fff;
+  }
+  #tableTicket tbody tr:hover td.sticky-col-1,
+  #tableTicket tbody tr:hover td.sticky-col-2 {
+    background-color: #f1f1f1;
+  }
+
+  #tableTicket {
+    border-collapse: separate !important;
+    border-spacing: 0;
+  }
+  #tableTicket th, #tableTicket td {
+    border-bottom: 1px solid #dee2e6 !important;
+    padding-right: 25px !important;
+  }
+
+  /* Floating / Sticky Horizontal Scrollbar */
+  #floatingScrollbarWrapTicket {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: #fff;
+    border-top: 1px solid #dee2e6;
+    padding: 4px 0;
+    display: none;
+  }
+  #floatingScrollbarInnerTicket {
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 14px;
+  }
+  #floatingScrollbarContentTicket {
+    height: 1px;
+  }
 </style>
 @endsection
 
@@ -928,6 +1000,8 @@ $(document).ready(function() {
   var table = $('#tableTicket').DataTable({
     processing: true,
     serverSide: true,
+    scrollX: true,
+    autoWidth: false,
     ajax: {
       url: '{{ url("ticketing/data") }}',
       type: 'GET',
@@ -943,15 +1017,18 @@ $(document).ready(function() {
       {
         data: 'ticket_no',
         name: 'ticket_no',
+        width: '110px',
+        className: 'sticky-col-1',
         render: function(data, type, row) {
           return `<a href="/ticketing/${row.id}" class="text-primary fw-bold">${data}</a>`;
         }
       },
-      { data: 'cid', name: 'cid' },
-      { data: 'nama_customer', name: 'nama_customer' },
+      { data: 'cid', name: 'cid', width: '90px' },
+      { data: 'nama_customer', name: 'nama_customer', width: '150px', className: 'sticky-col-2' },
       {
         data: 'jenis',
         name: 'jenis',
+        width: '110px',
         render: function(data) {
           if (!data) return '<span class="badge bg-secondary">-</span>';
           const badges = {
@@ -966,6 +1043,7 @@ $(document).ready(function() {
       {
         data: 'metode_penanganan',
         name: 'metode_penanganan',
+        width: '100px',
         render: function(data) {
           if (!data) return '<span class="badge bg-secondary">-</span>';
           const badge = data === 'remote' ? 'bg-dark' : 'bg-primary';
@@ -975,6 +1053,7 @@ $(document).ready(function() {
       {
         data: 'priority',
         name: 'priority',
+        width: '90px',
         render: function(data) {
           if (!data) return '<span class="badge bg-secondary">-</span>';
           const badges = {
@@ -986,11 +1065,12 @@ $(document).ready(function() {
           return '<span class="badge ' + (badges[data] || 'bg-secondary') + '">' + data.toUpperCase() + '</span>';
         }
       },
-      { data: 'tanggal_kunjungan', name: 'tanggal_kunjungan' },
-      { data: 'hari', name: 'hari' },
+      { data: 'tanggal_kunjungan', name: 'tanggal_kunjungan', width: '130px' },
+      { data: 'hari', name: 'hari', width: '80px' },
       {
         data: 'kendala',
         name: 'kendala',
+        width: '180px',
         render: function(data) {
           if (!data) return '-';
           if (data.length > 50) {
@@ -1002,6 +1082,7 @@ $(document).ready(function() {
       {
         data: 'status',
         name: 'status',
+        width: '100px',
         render: function(data) {
           const badges = {
             'open': 'bg-secondary',
@@ -1017,6 +1098,7 @@ $(document).ready(function() {
         data: 'id',
         orderable: false,
         searchable: false,
+        width: '100px',
         render: function(data, type, row) {
           return `
             <button class="btn btn-sm btn-warning btn-edit" data-id="${data}" title="Edit">
@@ -1032,6 +1114,69 @@ $(document).ready(function() {
     order: [[0, 'desc']],
     pageLength: 10
   });
+
+  // ── Floating Horizontal Scrollbar (Ticket Table) ───────────────
+  (function initFloatingScrollbar() {
+    const $floatWrap    = $('#floatingScrollbarWrapTicket');
+    const $floatInner   = $('#floatingScrollbarInnerTicket');
+    const $floatContent = $('#floatingScrollbarContentTicket');
+
+    function getRealScrollEl() {
+      return $('#tableTicket').closest('.dataTables_scrollBody').length
+        ? $('#tableTicket').closest('.dataTables_scrollBody')
+        : $('#tableTicket').closest('.table-responsive');
+    }
+
+    function syncFloatingScrollbar() {
+      const $scrollEl = getRealScrollEl();
+      const scrollWidth = $scrollEl[0] ? $scrollEl[0].scrollWidth : 0;
+      const clientWidth = $scrollEl[0] ? $scrollEl[0].clientWidth : 0;
+      if (scrollWidth > clientWidth) {
+        $floatContent.width(scrollWidth);
+        $floatInner.width($scrollEl.outerWidth());
+        const offset = $scrollEl.offset();
+        $floatWrap.css({ left: offset ? offset.left : 0, width: $scrollEl.outerWidth() });
+        const tableBottom = offset ? offset.top + $scrollEl.outerHeight() : 9999;
+        const viewBottom  = $(window).scrollTop() + $(window).height();
+        if (tableBottom > viewBottom) { $floatWrap.show(); } else { $floatWrap.hide(); }
+      } else {
+        $floatWrap.hide();
+      }
+    }
+
+    let syncingFloat = false, syncingReal = false;
+
+    $floatInner.on('scroll', function() {
+      if (syncingFloat) return;
+      syncingReal = true;
+      const $scrollEl = getRealScrollEl();
+      if ($scrollEl.length) $scrollEl[0].scrollLeft = this.scrollLeft;
+      setTimeout(function() { syncingReal = false; }, 20);
+    });
+
+    $(document).on('scroll.floatbarticket', function() {
+      const $scrollEl = getRealScrollEl();
+      if (!syncingReal && $scrollEl.length) {
+        syncingFloat = true;
+        $floatInner[0].scrollLeft = $scrollEl[0].scrollLeft;
+        setTimeout(function() { syncingFloat = false; }, 20);
+      }
+      syncFloatingScrollbar();
+    });
+
+    $('#tableTicket').on('draw.dt', function() { setTimeout(syncFloatingScrollbar, 100); });
+    $(window).on('resize.floatbarticket', syncFloatingScrollbar);
+    setTimeout(syncFloatingScrollbar, 500);
+
+    $(document).on('scroll.dtscrollticket', '.dataTables_scrollBody, .table-responsive', function() {
+      if (this === getRealScrollEl()[0] && !syncingReal) {
+        syncingFloat = true;
+        $floatInner[0].scrollLeft = this.scrollLeft;
+        setTimeout(function() { syncingFloat = false; }, 20);
+      }
+    });
+  })();
+  // ───────────────────────────────────────────────────────────────
 
   // Show detail
   $('#tableTicket').on('click', '.btn-detail', function() {

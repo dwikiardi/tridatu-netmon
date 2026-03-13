@@ -25,6 +25,73 @@
   .select2-dropdown {
     z-index: 9999 !important;
   }
+
+  /* Sticky Columns - CID & Nama */
+  .sticky-col-1 {
+    position: sticky !important;
+    left: 0;
+    z-index: 2;
+    background-color: #fff !important;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+  }
+  .sticky-col-2 {
+    position: sticky !important;
+    left: 100px; /* Sesuai lebar baru kolom CID */
+    z-index: 2;
+    background-color: #fff !important;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+  }
+
+  /* Perbaikan agar border tidak menghilang dan teks tidak terpotong */
+  #tableCustomer {
+    border-collapse: separate !important;
+    border-spacing: 0;
+  }
+  #tableCustomer th, #tableCustomer td {
+    border-bottom: 1px solid #dee2e6 !important;
+    padding-right: 25px !important; /* Ruang untuk icon sorting */
+  }
+
+  /* Header Sticky Column (Corner) */
+  .dataTables_scrollHead th.sticky-col-1,
+  .dataTables_scrollHead th.sticky-col-2 {
+    z-index: 5 !important;
+    background-color: #f8f9fa !important;
+  }
+
+  /* Sticky thead (DataTables scrollX pakai .dataTables_scrollHead) */
+  #tableCustomer_wrapper .dataTables_scrollHead {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #fff;
+  }
+  /* Pastikan row hover tidak menghilangkan background sticky */
+  #tableCustomer tbody tr:hover td.sticky-col-1,
+  #tableCustomer tbody tr:hover td.sticky-col-2 {
+    background-color: #f1f1f1;
+  }
+
+  /* Floating / Sticky Horizontal Scrollbar */
+  #floatingScrollbarWrap {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: #fff;
+    border-top: 1px solid #dee2e6;
+    padding: 4px 0;
+    display: none; /* tampil saat tabel visible */
+  }
+  #floatingScrollbarInner {
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: 14px;
+  }
+  #floatingScrollbarContent {
+    height: 1px;
+  }
 </style>
 @endsection
 
@@ -69,8 +136,8 @@
     <table class="table" id="tableCustomer">
       <thead>
         <tr>
-          <th>CID</th>
-          <th>Nama</th>
+          <th class="sticky-col-1">CID</th>
+          <th class="sticky-col-2">Nama</th>
           <th>Sales</th>
           <th>POP</th>
           <th>Packet</th>
@@ -89,26 +156,49 @@
   </div>
 </div>
 
+<!-- Floating Horizontal Scrollbar -->
+<div id="floatingScrollbarWrap">
+  <div id="floatingScrollbarInner">
+    <div id="floatingScrollbarContent"></div>
+  </div>
+</div>
+
 <!-- Modal Detail Cust -->
 <div class="modal fade" id="modalDetailCust" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+  <div class="modal-dialog modal-xl" role="document">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="labelModalCust"></h5>
+        <h5 class="modal-title">Detail Customer & Asset</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <!-- Garis pembatas -->
       <hr class="my-0">
       <div class="modal-body">
         <div class="row">
-          <p id="dataDetailCust"></p>
+          <!-- Kolom Kiri: Profil Customer -->
+          <div class="col-lg-7 border-end">
+            <h6 class="fw-bold mb-3"><i class="bx bx-user me-1"></i> Customer Profile</h6>
+            <div id="customerProfileContent">
+              <!-- Detail table will be injected here -->
+            </div>
+          </div>
+          
+          <!-- Kolom Kanan: Asset Management Integration -->
+          <div class="col-lg-5">
+            <h6 class="fw-bold mb-3"><i class="bx bx-package me-1"></i> Asset Summary</h6>
+            <div id="assetSummaryContent">
+              <div class="text-center py-5">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                <span class="ms-2">Loading assets...</span>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
-</div>
 </div>
 
 <!-- Modal Edit / Add Cust -->
@@ -381,8 +471,8 @@ $(document).ready(function() {
         type: 'GET'
       },
       columns: [
-        { data: 'cid', name: 'cid', width: '80px' },
-        { data: 'nama', name: 'nama', width: '150px' },
+        { data: 'cid', name: 'cid', width: '100px', className: 'sticky-col-1' },
+        { data: 'nama', name: 'nama', width: '200px', className: 'sticky-col-2' },
         { data: 'sales', name: 'sales', width: '120px' },
         { data: 'pop', name: 'pop', defaultContent: '-', width: '100px' },
         { data: 'packet', name: 'packet', width: '100px' },
@@ -426,6 +516,116 @@ $(document).ready(function() {
       ],
       order: [[0, 'asc']]
     });
+
+  // ── Floating Horizontal Scrollbar ──────────────────────────────
+  // Buat scrollbar yang sticky di bawah viewport agar user tidak
+  // perlu scroll ke bawah tabel hanya untuk geser ke samping.
+  (function initFloatingScrollbar() {
+    // DataTables wraps table in .dataTables_scrollBody
+    // tapi karena kita pakai scrollX tanpa scrollY, ambil .dataTables_scroll > .dataTables_scrollBody
+    // Lebih aman: target .table-responsive yang bungkus #tableCustomer
+    const $tableWrapper = $('#tableCustomer').closest('.dataTables_scrollBody, .table-responsive');
+    const $floatWrap    = $('#floatingScrollbarWrap');
+    const $floatInner   = $('#floatingScrollbarInner');
+    const $floatContent = $('#floatingScrollbarContent');
+
+    function getRealScrollEl() {
+      // DataTables dengan scrollX membuat .dataTables_scrollBody
+      return $('#tableCustomer').closest('.dataTables_scrollBody').length
+        ? $('#tableCustomer').closest('.dataTables_scrollBody')
+        : $('#tableCustomer').closest('.table-responsive');
+    }
+
+    function syncFloatingScrollbar() {
+      const $scrollEl = getRealScrollEl();
+      const scrollWidth = $scrollEl[0] ? $scrollEl[0].scrollWidth : 0;
+      const clientWidth = $scrollEl[0] ? $scrollEl[0].clientWidth : 0;
+
+      if (scrollWidth > clientWidth) {
+        // Sesuaikan lebar konten floating agar ratio scroll-nya sama
+        $floatContent.width(scrollWidth);
+        $floatInner.width($scrollEl.outerWidth());
+
+        // Posisikan floatWrap sejajar dengan kiri & lebar $scrollEl
+        const offset = $scrollEl.offset();
+        $floatWrap.css({
+          left:  offset ? offset.left : 0,
+          width: $scrollEl.outerWidth()
+        });
+
+        // Tampilkan hanya jika scrollbar asli TIDAK terlihat di viewport
+        const tableBottom = offset ? offset.top + $scrollEl.outerHeight() : 9999;
+        const viewBottom  = $(window).scrollTop() + $(window).height();
+        if (tableBottom > viewBottom) {
+          $floatWrap.show();
+        } else {
+          $floatWrap.hide();
+        }
+      } else {
+        $floatWrap.hide();
+      }
+    }
+
+    // Sinkronisasi dua arah ── flag agar tidak infinite-loop
+    let syncingFloat = false;
+    let syncingReal  = false;
+
+    $floatInner.on('scroll', function() {
+      if (syncingFloat) return;
+      syncingReal = true;
+      const $scrollEl = getRealScrollEl();
+      if ($scrollEl.length) $scrollEl[0].scrollLeft = this.scrollLeft;
+      setTimeout(function() { syncingReal = false; }, 20);
+    });
+
+    $(document).on('scroll.floatbar', function() {
+      const $scrollEl = getRealScrollEl();
+      if (!syncingReal && $scrollEl.length) {
+        syncingFloat = true;
+        $floatInner[0].scrollLeft = $scrollEl[0].scrollLeft;
+        setTimeout(function() { syncingFloat = false; }, 20);
+      }
+      syncFloatingScrollbar();
+    });
+
+    // Sinkronkan juga saat tabel itu sendiri di-scroll
+    $(document).on('scroll.floatbar2', '#tableCustomer', function() {
+      syncFloatingScrollbar();
+    });
+
+    // Jalankan saat DataTable selesai draw
+    $('#tableCustomer').on('draw.dt', function() {
+      setTimeout(syncFloatingScrollbar, 100);
+    });
+
+    // Jalankan saat window resize
+    $(window).on('resize.floatbar', syncFloatingScrollbar);
+
+    // Trigger pertama kali
+    setTimeout(syncFloatingScrollbar, 500);
+
+    // Sync scroll real → float
+    $(document).on('scroll', function() {
+      const $scrollEl = getRealScrollEl();
+      if (!syncingReal && $scrollEl.length) {
+        syncingFloat = true;
+        $floatInner[0].scrollLeft = $scrollEl[0].scrollLeft;
+        setTimeout(function() { syncingFloat = false; }, 20);
+      }
+    });
+
+    // Pasang listener pada elemen scroll DataTable langsung
+    $(document).on('scroll.dtscroll', '.dataTables_scrollBody, .table-responsive', function() {
+      if (this === getRealScrollEl()[0]) {
+        if (!syncingReal) {
+          syncingFloat = true;
+          $floatInner[0].scrollLeft = this.scrollLeft;
+          setTimeout(function() { syncingFloat = false; }, 20);
+        }
+      }
+    });
+  })();
+  // ───────────────────────────────────────────────────────────────
   
   // Column visibility toggle with localStorage persistence
   const STORAGE_KEY = 'customerTableColumns';
@@ -478,54 +678,167 @@ $(document).ready(function() {
   // Handle Detail button
   $(document).on('click', '.btn-detail', function() {
     let cid = $(this).data('cid');
+    let $modal = $('#modalDetailCust');
     
+    // Reset contents
+    $('#customerProfileContent').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>');
+    $('#assetSummaryContent').html('<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>');
+    
+    $modal.modal('show');
+
+    // 1. Load Customer Profile
     $.ajax({
       url: '{{ route("detail-customer") }}',
       type: 'GET',
       data: { cid: cid },
       success: function(data) {
-        let detailHtml = `
-          <table class="table table-sm">
-            <tr><th>CID</th><td>${data.cid}</td></tr>
-            <tr><th>Nama</th><td>${data.nama}</td></tr>
-            <tr><th>Email</th><td>${data.email || '-'}</td></tr>
-            <tr><th>Sales</th><td>${data.sales || '-'}</td></tr>
-            <tr><th>POP</th><td>${data.pop || '-'}</td></tr>
-            <tr><th>Packet</th><td>${data.packet || '-'}</td></tr>
-            <tr><th>Alamat</th><td>${data.alamat || '-'}</td></tr>
-            <tr><th>PIC IT</th><td>${data.pic_it || '-'}</td></tr>
-            <tr><th>No IT</th><td>${data.no_it || '-'}</td></tr>
-            <tr><th>PIC Finance</th><td>${data.pic_finance || '-'}</td></tr>
-            <tr><th>No Finance</th><td>${data.no_finance || '-'}</td></tr>
-            <tr><th>Coordinate</th><td>${data.coordinate_maps || '-'}</td></tr>
-            <tr><th>Pembayaran</th><td>${data.pembayaran_perbulan_formatted || '-'}</td></tr>
-            <tr><th>Setup Fee</th><td>${data.setup_fee_formatted || '-'}</td></tr>
-            <tr><th>Tgl Aktif</th><td>${data.tgl_customer_aktif || '-'}</td></tr>
-            <tr><th>Billing Aktif</th><td>${data.billing_aktif || '-'}</td></tr>
-            <tr><th>Status</th><td>${data.status || '-'}</td></tr>
-            <tr><th>Note</th><td>${data.note || '-'}</td></tr>
-          </table>
+        let profileHtml = `
+          <div class="row g-3">
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">CID</small>
+              <p class="fw-bold text-primary mb-0">${data.cid}</p>
+            </div>
+            <div class="col-sm-6 text-sm-end">
+              <small class="text-muted text-uppercase fw-semibold d-block">Status</small>
+              <span class="badge ${data.status === 'Aktif' ? 'bg-success' : 'bg-danger'}">${data.status || '-'}</span>
+            </div>
+            
+            <div class="col-12"><hr class="my-0"></div>
+
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">Customer Name</small>
+              <p class="mb-0">${data.nama}</p>
+            </div>
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">Email</small>
+              <p class="mb-0">${data.email || '-'}</p>
+            </div>
+
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">Sales / PIC</small>
+              <p class="mb-0 text-truncate" title="${data.sales}">${data.sales || '-'}</p>
+            </div>
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">POP Location</small>
+              <span class="badge bg-label-info">${data.pop || '-'}</span>
+            </div>
+
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">Packet Plan</small>
+              <p class="mb-0">${data.packet || '-'}</p>
+            </div>
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">Billing Active</small>
+              <p class="mb-0">${data.billing_aktif || '-'}</p>
+            </div>
+
+            <div class="col-12"><hr class="my-0"></div>
+
+            <div class="col-md-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">Payment / Month</small>
+              <p class="mb-0 text-success fw-bold">${data.pembayaran_perbulan_formatted || '-'}</p>
+            </div>
+            <div class="col-md-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">Setup Fee</small>
+              <p class="mb-0">${data.setup_fee_formatted || '-'}</p>
+            </div>
+
+            <div class="col-12"><hr class="my-0"></div>
+
+            <div class="col-12">
+              <small class="text-muted text-uppercase fw-semibold d-block">Address</small>
+              <p class="mb-0 small">${data.alamat || '-'}</p>
+            </div>
+
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">PIC IT</small>
+              <p class="mb-0">${data.pic_it || '-'} <br> <small class="text-muted">${data.no_it || '-'}</small></p>
+            </div>
+            <div class="col-sm-6">
+              <small class="text-muted text-uppercase fw-semibold d-block">PIC Finance</small>
+              <p class="mb-0">${data.pic_finance || '-'} <br> <small class="text-muted">${data.no_finance || '-'}</small></p>
+            </div>
+
+            <div class="col-12">
+              <small class="text-muted text-uppercase fw-semibold d-block">Maps Coordinate</small>
+              <a href="${data.coordinate_maps}" target="_blank" class="text-truncate d-block small">${data.coordinate_maps || '-'}</a>
+            </div>
+
+            <div class="col-12">
+              <div class="p-2 bg-light rounded shadow-sm">
+                <small class="text-muted text-uppercase fw-bold d-block" style="font-size: 0.65rem">Internal Note:</small>
+                <div style="font-size: 0.85rem">${data.note || '-'}</div>
+              </div>
+            </div>
+          </div>
         `;
-        
-        // Show in a modal or alert
-        if ($('#modalDetail').length === 0) {
-          $('body').append(`
-            <div class="modal fade" id="modalDetail" tabindex="-1">
-              <div class="modal-dialog">
-                <div class="modal-content">
-                  <div class="modal-header">
-                    <h5 class="modal-title">Detail Customer</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        $('#customerProfileContent').html(profileHtml);
+      },
+      error: function() {
+        $('#customerProfileContent').html('<div class="alert alert-danger">Failed to load profile.</div>');
+      }
+    });
+
+    // 2. Load Asset Summary (Integrated with Asset Management)
+    // Route: /customers/{externalId}/assets
+    $.ajax({
+      url: `/customers/${cid}/assets`,
+      type: 'GET',
+      success: function(response) {
+        let assets = [];
+        // Handle both possible response structures (wrap in summary or direct array)
+        if (response.summary) assets = response.summary;
+        else if (Array.isArray(response)) assets = response;
+        else if (response.data) assets = response.data;
+
+        if (assets.length === 0) {
+          $('#assetSummaryContent').html(`
+            <div class="text-center py-5">
+              <i class="bx bx-info-circle fs-1 text-muted mb-2"></i>
+              <p class="text-muted">No assets deployed for this customer.</p>
+            </div>
+          `);
+          return;
+        }
+
+        let assetHtml = '<div class="list-group list-group-flush">';
+        assets.forEach(function(asset) {
+          assetHtml += `
+            <div class="list-group-item px-0 py-3">
+              <div class="d-flex align-items-start">
+                <div class="avatar flex-shrink-0 me-3">
+                  <span class="avatar-initial rounded bg-label-primary"><i class="bx bx-cube"></i></span>
+                </div>
+                <div class="d-flex w-100 flex-wrap align-items-center justify-content-between gap-2">
+                  <div class="me-2">
+                    <h6 class="mb-0 text-dark">${asset.asset_name || asset.name || 'Unknown Asset'}</h6>
+                    <small class="text-muted">${asset.total_qty || asset.qty || 0} ${asset.uom || 'unit'}</small>
                   </div>
-                  <div class="modal-body" id="detailContent"></div>
+                  <div class="user-progress text-end">
+                    <span class="badge bg-label-info" style="font-size: 0.75rem">${asset.label || (asset.asset_name + ' (' + asset.total_qty + ')') }</span>
+                  </div>
                 </div>
               </div>
             </div>
-          `);
+          `;
+        });
+        assetHtml += '</div>';
+        $('#assetSummaryContent').html(assetHtml);
+      },
+      error: function(xhr) {
+        let errMsg = 'Data not found / connection error';
+        if (xhr.status === 404) {
+          errMsg = 'CID not found in Asset Management';
+        } else if (xhr.responseJSON && (xhr.responseJSON.detail || xhr.responseJSON.message)) {
+          errMsg = xhr.responseJSON.detail || xhr.responseJSON.message;
         }
         
-        $('#detailContent').html(detailHtml);
-        $('#modalDetail').modal('show');
+        $('#assetSummaryContent').html(`
+          <div class="alert alert-warning py-3 mb-0">
+            <i class="bx bx-error-circle me-1"></i>
+            ${errMsg}
+          </div>
+        `);
       }
     });
   });
