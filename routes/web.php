@@ -77,6 +77,13 @@ Route::middleware(['auth'])->group(function () {
      Route::put('/datacust/update', [TablesCustomer::class, 'update'])->name('update-customer');
      Route::delete('/datacust/delete', [TablesCustomer::class, 'destroy'])->name('delete-customer');
      Route::get('/datacust/pops', [TablesCustomer::class, 'getPops'])->name('get-pops');
+     // layout datalead
+     Route::get('/datalead/view', [App\Http\Controllers\datalead\LeadController::class, 'index'])->name('view-lead');
+     Route::get('/datalead/data', [App\Http\Controllers\datalead\LeadController::class, 'show'])->name('show-lead');
+     Route::get('/datalead/detail', [App\Http\Controllers\datalead\LeadController::class, 'detail'])->name('detail-lead');
+     Route::post('/datalead/store', [App\Http\Controllers\datalead\LeadController::class, 'store'])->name('store-lead');
+     Route::put('/datalead/update', [App\Http\Controllers\datalead\LeadController::class, 'update'])->name('update-lead');
+     Route::delete('/datalead/delete', [App\Http\Controllers\datalead\LeadController::class, 'destroy'])->name('delete-lead');
     // customer log report
      Route::get('/report/customer-log', [CustomerLogController::class, 'index'])->name('view-customer-log');
      Route::get('/report/customer-log/show', [CustomerLogController::class, 'show'])->name('show-customer-log');
@@ -89,8 +96,10 @@ Route::middleware(['auth'])->group(function () {
      Route::get('/ticketing/api/replies', [TicketController::class, 'getReplies'])->name('get-ticket-replies');
      Route::post('/ticketing/api/update-rfo', [TicketController::class, 'updateRfo'])->name('update-rfo');
      Route::get('/ticketing/export-rfo/{id}', [TicketController::class, 'exportSingleRfo'])->name('export-rfo-single');
-     Route::post('/ticketing/api/reply', [TicketController::class, 'storeReply'])->name('store-ticket-reply');
-     Route::post('/ticketing/store', [TicketController::class, 'store'])->name('store-ticketing');
+      Route::post('/ticketing/api/reply', [TicketController::class, 'storeReply'])->name('store-ticket-reply');
+      Route::put('/ticketing/api/reply/update', [TicketController::class, 'updateReply'])->name('update-ticket-reply');
+       Route::delete('/ticketing/api/reply/delete', [TicketController::class, 'destroyReply'])->name('delete-ticket-reply');
+      Route::post('/ticketing/store', [TicketController::class, 'store'])->name('store-ticketing');
      Route::put('/ticketing/update', [TicketController::class, 'update'])->name('update-ticketing');
      Route::delete('/ticketing/delete', [TicketController::class, 'destroy'])->name('delete-ticketing');
      Route::get('/ticketing/customers', [TicketController::class, 'getCustomers'])->name('get-ticketing-customers');
@@ -99,6 +108,7 @@ Route::middleware(['auth'])->group(function () {
      Route::get('/ticketing/teknisi', [TicketController::class, 'getTeknisi'])->name('get-ticketing-teknisi');
      Route::get('/ticketing/sales', [TicketController::class, 'getSales'])->name('get-ticketing-sales');
      Route::get('/calon-customers', [TicketController::class, 'getCalonCustomers'])->name('get-calon-customers');
+     Route::get('/ticketing/search-names', [TicketController::class, 'searchNames'])->name('search-names');
      Route::get('/ticketing/{ticketId}', [TicketController::class, 'showDetailPage'])->name('show-ticket-detail-page');
      // Debug route - hapus setelah selesai debugging
      Route::get('/debug/customers', function() {

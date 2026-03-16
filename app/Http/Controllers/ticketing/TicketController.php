@@ -106,7 +106,11 @@ class TicketController extends Controller
         // Format data untuk display
         $formattedData = $data->map(function ($ticket) {
             $namaCustomer = $ticket->customer ? $ticket->customer->nama : ($ticket->calonCustomer ? $ticket->calonCustomer->nama : '-');
+            
             $cid = $ticket->cid ?? 'TDNSurvey';
+            if (!$ticket->cid && $ticket->calon_customer_id) {
+                $cid = 'Survey-' . str_pad($ticket->calon_customer_id, 3, '0', STR_PAD_LEFT);
+            }
 
             // Generate ticket no: TDN-DDMMYY-HHMM-NO
             $tanggal = $ticket->tanggal_kunjungan ? $ticket->tanggal_kunjungan->format('dmY') : date('dmY');
@@ -146,10 +150,15 @@ class TicketController extends Controller
         $alamatCustomer = $ticket->calonCustomer ? $ticket->calonCustomer->alamat : ($ticket->customer ? $ticket->customer->alamat : '-');
         $koordinat = $ticket->customer ? $ticket->customer->coordinate_maps : ($ticket->calonCustomer ? $ticket->calonCustomer->koordinat : null);
         $salesName = $ticket->calonCustomer && $ticket->calonCustomer->sales ? $ticket->calonCustomer->sales->name : '-';
+        
+        $cid = $ticket->cid ?? 'TDNSurvey';
+        if (!$ticket->cid && $ticket->calon_customer_id) {
+            $cid = 'Survey-' . str_pad($ticket->calon_customer_id, 3, '0', STR_PAD_LEFT);
+        }
 
         return response()->json([
             'id' => $ticket->id,
-            'cid' => $ticket->cid,
+            'cid' => $cid,
             'calon_customer_id' => $ticket->calon_customer_id,
             'nama_customer' => $namaCustomer,
             'telp_customer' => $telpCustomer,
@@ -176,6 +185,7 @@ class TicketController extends Controller
     {
         $validated = $request->validate([
             'jenis' => 'required|in:maintenance-komplain,survey,installasi',
+            'force_create' => 'nullable|string', // Flag to bypass name duplication check
             // Maintenance/Komplain
             'cid' => 'nullable|string',
             'kendala' => 'nullable|string',
@@ -253,13 +263,25 @@ class TicketController extends Controller
             }
         }
 
-        // Type-specific handling
         if ($jenis === 'maintenance-komplain') {
             // Maintenance & Komplain: Only customer + kendala
             // Other fields (priority, metode, lokasi, tanggal) akan diisi saat update
             $data['jenis'] = 'maintenance'; // Default ke maintenance, bisa diubah di update
             $data['cid'] = $validated['cid'] ?? null;
             $data['kendala'] = $validated['kendala'] ?? null;
+
+            // Jika CID adalah "Survey-XXX", link juga ke calon_customer_id 
+            // agar relasi prospek tetap terjaga, namun CID juga terisi untuk history.
+            if (!empty($data['cid']) && \Illuminate\Support\Str::startsWith($data['cid'], 'Survey-')) {
+                // Extract number dari CID (contoh: Survey-005 -> 5)
+                $calonId = intval(str_replace('Survey-', '', $data['cid']));
+                if ($calonId > 0) {
+                    $data['calon_customer_id'] = $calonId;
+                    // Kosongkan cid agar tidak melanggar foreign key constraint ke tabel customers
+                    $data['cid'] = null;
+                }
+            }
+
             // Don't set priority, metode_penanganan, tanggal_kunjungan - akan null di database
         }
         elseif ($jenis === 'survey') {
@@ -309,9 +331,25 @@ class TicketController extends Controller
             $data['kendala'] = $validated['survey_deskripsi'] ?? null;
 
             if ($surveyTipe === 'baru') {
+                // Check for duplicate name if not forced
+                $nama = trim($validated['survey_nama']);
+                if (($validated['force_create'] ?? 'false') !== 'true') {
+                    // Casing: MySQL default collation is case-insensitive
+                    // Spaces: We use TRIM() in query to match even if DB has trailing spaces
+                    $existsInCalon = CalonCustomer::whereRaw('TRIM(nama) = ?', [$nama])->exists();
+                    $existsInCustomer = Customer::whereRaw('TRIM(nama) = ?', [$nama])->exists();
+                    
+                    if ($existsInCalon || $existsInCustomer) {
+                        return response()->json([
+                            'status' => 'confirm_duplicate',
+                            'message' => "Nama customer '$nama' sudah terdaftar di sistem. Apakah Anda ingin tetap melanjutkan pembuatan ticket survey baru?",
+                        ], 409);
+                    }
+                }
+
                 // Pelanggan baru biasa
                 $calonCustomer = CalonCustomer::create([
-                    'nama' => $validated['survey_nama'],
+                    'nama' => $nama,
                     'telepon' => $validated['survey_telepon'] ?? null,
                     'alamat' => $validated['survey_alamat'],
                     'koordinat' => $validated['survey_koordinat'],
@@ -321,9 +359,23 @@ class TicketController extends Controller
                 $data['calon_customer_id'] = $calonCustomer->id;
                 $data['pic_it_lokasi'] = $validated['survey_pic_it'] ?? null;
             } elseif ($surveyTipe === 'project') {
+                // Check for duplicate name if not forced
+                $nama = trim($validated['survey_project_nama']);
+                if (($validated['force_create'] ?? 'false') !== 'true') {
+                    $existsInCalon = CalonCustomer::whereRaw('TRIM(nama) = ?', [$nama])->exists();
+                    $existsInCustomer = Customer::whereRaw('TRIM(nama) = ?', [$nama])->exists();
+                    
+                    if ($existsInCalon || $existsInCustomer) {
+                        return response()->json([
+                            'status' => 'confirm_duplicate',
+                            'message' => "Nama project '$nama' sudah terdaftar di sistem. Apakah Anda ingin tetap melanjutkan pembuatan ticket survey baru?",
+                        ], 409);
+                    }
+                }
+
                 // Survey project
                 $calonCustomer = CalonCustomer::create([
-                    'nama' => $validated['survey_project_nama'],
+                    'nama' => $nama,
                     'telepon' => $validated['survey_project_telepon'] ?? null,
                     'alamat' => $validated['survey_project_alamat'],
                     'koordinat' => $validated['survey_project_koordinat'],
@@ -334,22 +386,33 @@ class TicketController extends Controller
                 $data['pic_it_lokasi'] = $validated['survey_project_pic'] ?? null;
             } else {
                 // Pelanggan existing: link ke customer
-                $data['cid'] = $validated['survey_customer_id'] ?? null;
+                $rawCid = $validated['survey_customer_id'] ?? null;
                 $data['pic_it_lokasi'] = $validated['survey_jenis_existing'] ?? null;
 
-                // Buat calon_customers record untuk tracking survey existing
-                // Ini untuk kemudahan filter di penambahan alat dropdown
-                $customer = Customer::find($validated['survey_customer_id']);
-                if ($customer) {
-                    $calonCustomer = CalonCustomer::create([
-                        'nama' => $customer->nama,
-                        'telepon' => $customer->telepon ?? null,
-                        'alamat' => $customer->alamat,
-                        'koordinat' => $customer->coordinate_maps,
-                        'sales_id' => auth()->id(), // Logged in user as sales
-                        'tipe_survey' => 'existing',
-                    ]);
-                    $data['calon_customer_id'] = $calonCustomer->id;
+                if (!empty($rawCid) && \Illuminate\Support\Str::startsWith($rawCid, 'Survey-')) {
+                    // Ini sebenarnya prospect yang ada di dropdown, masuk ke penambahan
+                    $calonId = intval(str_replace('Survey-', '', $rawCid));
+                    if ($calonId > 0) {
+                        $data['calon_customer_id'] = $calonId;
+                        $data['cid'] = null; // Kosongkan agar aman dari foreign key
+                    }
+                } else {
+                    $data['cid'] = $rawCid;
+
+                    // Buat calon_customers record untuk tracking survey existing
+                    // Ini untuk kemudahan filter di penambahan alat dropdown
+                    $customer = Customer::find($rawCid);
+                    if ($customer) {
+                        $calonCustomer = CalonCustomer::create([
+                            'nama' => $customer->nama,
+                            'telepon' => $customer->telepon ?? null,
+                            'alamat' => $customer->alamat,
+                            'koordinat' => $customer->coordinate_maps,
+                            'sales_id' => auth()->id(), // Logged in user as sales
+                            'tipe_survey' => 'existing',
+                        ]);
+                        $data['calon_customer_id'] = $calonCustomer->id;
+                    }
                 }
             }
         }
@@ -373,18 +436,8 @@ class TicketController extends Controller
                         ], 400);
                     }
 
-                    // Cek apakah ada ticket survey yang selesai
-                    $hasSurveyDone = $calonCustomer->tickets()
-                        ->where('jenis', 'survey')
-                        ->where('status', 'selesai')
-                        ->exists();
-
-                    if (!$hasSurveyDone) {
-                        return response()->json([
-                            'message' => 'Calon customer ini belum memiliki ticket survey yang selesai. Selesaikan survey terlebih dahulu.',
-                            'status' => false
-                        ], 400);
-                    }
+                    // Pengecekan status survey selesai telah dihapus sesuai permintaan
+                    // sehingga prospek dari leads bisa langsung di-installasi
                 }
 
                 $data['calon_customer_id'] = $validated['install_calon_customer_id'] ?? null;
@@ -392,8 +445,18 @@ class TicketController extends Controller
                 $data['pop'] = $validated['install_pop'] ?? null;
             } elseif ($installTipe === 'penambahan') {
                 // Penambahan alat untuk customer existing (sudah survey sebelumnya)
-                $data['cid'] = $validated['install_customer_penambahan_id'] ?? null;
+                $rawCidInstall = $validated['install_customer_penambahan_id'] ?? null;
                 $data['pic_it_lokasi'] = 'Penambahan Alat'; // Mark as penambahan alat
+                
+                if (!empty($rawCidInstall) && \Illuminate\Support\Str::startsWith($rawCidInstall, 'Survey-')) {
+                    $calonId = intval(str_replace('Survey-', '', $rawCidInstall));
+                    if ($calonId > 0) {
+                        $data['calon_customer_id'] = $calonId;
+                        $data['cid'] = null;
+                    }
+                } else {
+                    $data['cid'] = $rawCidInstall;
+                }
             } elseif ($installTipe === 'terminate') {
                 // Re-aktivasi customer terminate
                 $data['cid'] = $validated['install_customer_id'] ?? null;
@@ -451,54 +514,94 @@ class TicketController extends Controller
 
     public function update(Request $request)
     {
-        $ticket = Ticket::findOrFail($request->id);
-
-        $data = $request->all();
-        $user = Auth::user();
-
-        // Set creator info jika belum ada
-        if (!$ticket->created_by) {
-            $data['created_by'] = $user->id;
-            $data['created_by_role'] = $user->jabatan ?? 'admin';
-        }
-
-        // Only update allowed fields from simplified form
-        $ticket->update([
-            'cid' => $data['cid'] ?? $ticket->cid,
-            'kendala' => $data['kendala'] ?? $ticket->kendala,
+        $validated = $request->validate([
+            'id' => 'required|exists:tickets,id',
+            'status' => 'nullable|string',
+            'priority' => 'nullable|in:low,medium,high,urgent',
+            'metode_penanganan' => 'nullable|in:remote,onsite',
         ]);
 
-        return response()->json(['message' => 'Ticket updated successfully']);
+        $ticket = Ticket::findOrFail($validated['id']);
+        
+        $ticketUpdateData = [];
+        if (isset($validated['status'])) $ticketUpdateData['status'] = $validated['status'];
+        if (isset($validated['priority'])) $ticketUpdateData['priority'] = $validated['priority'];
+        if (isset($validated['metode_penanganan'])) $ticketUpdateData['metode_penanganan'] = $validated['metode_penanganan'];
+
+        $ticket->update($ticketUpdateData);
+
+        // Recalculate SLA if status or method changed to keep stats accurate
+        if (isset($validated['status']) || isset($validated['metode_penanganan'])) {
+            $this->recalculateSla($ticket);
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Ticket updated successfully'
+        ]);
     }
 
     public function destroy(Request $request)
     {
-        $ticket = Ticket::findOrFail($request->id);
+        $ticketId = $request->id;
+        $ticket = Ticket::findOrFail($ticketId);
         $ticket->delete();
-        return response()->json(['message' => 'Ticket deleted successfully']);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Ticket deleted successfully'
+        ]);
     }
 
     public function getCustomers()
     {
+        // Get Active / Normal Customers
         $customers = Customer::select('cid', 'nama', 'pic_it', 'no_it', 'alamat', 'status')->orderBy('nama')->get();
-        return response()->json($customers);
+
+        // Get Prospects (CalonCustomer yang statusnya masih 'prospek')
+        // Ini memungkinkan pembuatan ticket Maintenance (misal ngecek ketersediaan tiang)
+        // untuk Prospect sebelum dirubah ke Customer resmi.
+        $prospects = CalonCustomer::where('status', 'prospek')
+            ->whereIn('tipe_survey', ['normal', 'project'])
+            ->orderBy('nama')->get()->map(function($calon) {
+            $surveyCid = 'Survey-' . str_pad($calon->id, 3, '0', STR_PAD_LEFT);
+            return [
+                'cid' => $surveyCid,
+                'nama' => $calon->nama . ' (Prospek)',
+                'pic_it' => $calon->pic_it ?? '-',
+                'no_it' => $calon->telepon ?? '-',
+                'alamat' => $calon->alamat ?? '-',
+                'status' => 'Prospek'
+            ];
+        });
+
+        // Merge Normal Customers with Prospects
+        $merged = $customers->concat($prospects);
+
+        return response()->json($merged);
     }
 
     public function getCalonCustomers()
     {
         // Hanya tampilkan calon customer yang:
         // 1. Belum di-convert (status = prospek)
-        // 2. Ticket survey-nya sudah selesai
-        // 3. Tipe survey = 'normal' (bukan project)
+        // 2. Tipe survey = 'normal' (Pelanggan Baru)
+        // 3. Survey-nya bukan tipe penambahan
+        $markers = ['penambahan_ap', 'penambahan_bandwidth', 'survey_project', 'lainnya'];
+
         $calonCustomers = CalonCustomer::where('status', 'prospek')
             ->where('tipe_survey', 'normal')
-            ->whereHas('tickets', function($query) {
-                $query->where('jenis', 'survey')
-                      ->where('status', 'selesai');
+            ->where(function($q) use ($markers) {
+                $q->whereDoesntHave('tickets', function($sq) {
+                    $sq->where('jenis', 'survey');
+                })
+                ->orWhereHas('tickets', function($sq) use ($markers) {
+                    $sq->where('jenis', 'survey')
+                       ->whereNotIn('pic_it_lokasi', $markers);
+                });
             })
             ->with(['tickets' => function($query) {
                 $query->where('jenis', 'survey')
-                      ->where('status', 'selesai')
                       ->with(['replies' => function($subQuery) {
                           $subQuery->orderBy('created_at', 'desc')->limit(1);
                       }])
@@ -529,56 +632,55 @@ class TicketController extends Controller
 
     public function getExistingCustomersWithSurvey()
     {
-        // Get customers yang sudah ada survey selesai di existing customer
-        // TAPI: Filter hanya survey yang belum ada installasi penambahan dari survey tersebut
+        // Get semua survey yang berstatus 'selesai' dan merupakan tipe 'penambahan'
+        // Baik itu dari customer existing maupun dari prospect yang di-survey penambahan
+        $markers = ['penambahan_ap', 'penambahan_bandwidth', 'survey_project', 'lainnya'];
 
-        // Get all completed existing customer surveys
         $surveyTickets = Ticket::where('jenis', 'survey')
-            ->where('status', 'selesai')
-            ->whereNotNull('cid')
-            ->whereHas('calonCustomer', function($query) {
-                $query->where('tipe_survey', 'existing');
+            ->where(function($q) use ($markers) {
+                // Tipe existing customer (cid tidak null)
+                $q->where(function($sq) {
+                    $sq->whereNotNull('cid')
+                       ->whereHas('calonCustomer', function($csq) {
+                           $csq->where('tipe_survey', 'existing');
+                       });
+                })
+                // ATAU memiliki marker penambahan
+                ->orWhereIn('pic_it_lokasi', $markers);
             })
-            ->with(['customer', 'replies' => function($query) {
+            ->with(['customer', 'calonCustomer', 'replies' => function($query) {
                 $query->orderBy('created_at', 'desc')->limit(1);
             }])
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->groupBy('cid') // Group by customer ID untuk ambil survey terbaru per customer
-            ->map(function($tickets) {
-                return $tickets->first();
-            });
+            ->get();
+            
+        // Grouping untuk mengambil survey terbaru per identitas
+        $grouped = $surveyTickets->groupBy(function($ticket) {
+            return $ticket->cid ?? ('prospect-' . $ticket->calon_customer_id);
+        })->map(function($tickets) {
+            return $tickets->first();
+        });
 
-        // Filter: hanya include survey yang belum ada installasi penambahan dari parent_ticket_id atau cid yang sama
-        $formatted = $surveyTickets->filter(function($ticket) {
-            if ($ticket->customer === null) {
-                return false;
-            }
-
-            // Check apakah sudah ada installasi penambahan dari survey ini
-            // Cek dengan parent_ticket_id atau cek berdasarkan cid + jenis installasi + pic_it_lokasi = 'Penambahan Alat'
-            $existingInstallasi = Ticket::where('jenis', 'installasi')
-                ->where('cid', $ticket->cid)
-                ->where('pic_it_lokasi', 'Penambahan Alat') // Check by marker
-                ->exists();
-
-            // Return true jika belum ada installasi penambahan
-            return !$existingInstallasi;
-        })->map(function($ticket) {
+        // Filter: hanya include survey yang belum ada installasi penambahan
+        $formatted = $grouped->map(function($ticket) {
             $customer = $ticket->customer;
+            $calon = $ticket->calonCustomer;
             $latestReply = $ticket->replies->first();
             $deskripsi = $latestReply ? $latestReply->reply : $ticket->kendala;
+            
+            $nama = $customer ? $customer->nama : ($calon ? $calon->nama : 'Unknown');
+            $rawCid = $customer ? $customer->cid : 'Survey-' . str_pad($ticket->calon_customer_id, 3, '0', STR_PAD_LEFT);
 
-            // Format display: Nama Customer - Ticket ID - Hasil Survey Terakhir
-            $displayName = $customer->nama . ' - Ticket #' . $ticket->id . ' - ' . \Illuminate\Support\Str::limit($deskripsi, 50);
+            // Format display: Nama - Ticket ID - Hasil Survey Terakhir
+            $displayName = $nama . ' - Ticket #' . $ticket->id . ' - ' . \Illuminate\Support\Str::limit($deskripsi, 50);
 
             return [
-                'cid' => $customer->cid,
-                'nama' => $customer->nama,
+                'cid' => $rawCid,
+                'nama' => $nama,
                 'display_name' => $displayName,
                 'ticket_id' => $ticket->id,
-                'alamat' => $customer->alamat ?? '',
-                'coordinate_maps' => $customer->coordinate_maps ?? '',
+                'alamat' => ($customer ? $customer->alamat : ($calon ? $calon->alamat : '')),
+                'coordinate_maps' => ($customer ? $customer->coordinate_maps : ($calon ? $calon->koordinat : '')),
                 'deskripsi_update' => $deskripsi,
             ];
         });
@@ -588,12 +690,14 @@ class TicketController extends Controller
 
     public function getSurveyProjects()
     {
-        // Get all survey tickets dengan tipe_survey = 'project' yang sudah selesai
+        // Get all survey tickets dengan tipe_survey = 'project' dan bukan merupakan penambahan
+        $markers = ['penambahan_ap', 'penambahan_bandwidth', 'survey_project', 'lainnya'];
+
         $surveyProjects = Ticket::where('jenis', 'survey')
-            ->where('status', 'selesai')
             ->whereHas('calonCustomer', function($query) {
                 $query->where('tipe_survey', 'project');
             })
+            ->whereNotIn('pic_it_lokasi', $markers)
             ->with(['calonCustomer', 'replies' => function($query) {
                 $query->orderBy('created_at', 'desc')->limit(1);
             }])
@@ -644,6 +748,26 @@ class TicketController extends Controller
             ->orderBy('name')
             ->get();
         return response()->json($sales);
+    }
+
+    public function searchNames(Request $request)
+    {
+        $query = $request->query('q');
+        if (strlen($query) < 2) {
+            return response()->json([]);
+        }
+
+        $customers = \App\Models\Customer::where('nama', 'LIKE', "%{$query}%")
+            ->select('nama', \Illuminate\Support\Facades\DB::raw("'Existing Customer' as source"))
+            ->limit(5)
+            ->get();
+
+        $calonCustomers = \App\Models\CalonCustomer::where('nama', 'LIKE', "%{$query}%")
+            ->select('nama', \Illuminate\Support\Facades\DB::raw("'Leads' as source"))
+            ->limit(5)
+            ->get();
+
+        return response()->json($customers->concat($calonCustomers));
     }
 
     // New method: show detail page (halaman forum/thread)
@@ -769,6 +893,9 @@ class TicketController extends Controller
             $allNames = array_unique(array_merge($existingNames, $teknisiNames));
             $updateData['pic_teknisi'] = implode(', ', array_filter($allNames));
         }
+
+        // Always sync ticket description (kendala) with latest reply for "Detail Update Terakhir"
+        $updateData['kendala'] = $validated['reply'];
 
         // Update status ticket berdasarkan update_status dari reply (ALWAYS update status)
         $updateStatus = $validated['update_status'] ?? 'need_visit';
@@ -1077,6 +1204,7 @@ class TicketController extends Controller
                     'jam_kunjungan' => $reply->jam_kunjungan,
                     'teknisi_id' => $reply->teknisi_id ?? null,
                     'teknisi_ids' => $reply->teknisi_ids ?? null,
+                    'is_deleted' => $reply->is_deleted ?? false,
                     'created_at' => $reply->created_at->format('d-m-Y H:i'),
                     'created_at_diff' => $reply->created_at->diffForHumans(),
                 ];
@@ -1115,6 +1243,8 @@ class TicketController extends Controller
         // If tanggal_kunjungan is NULL (e.g. on_progress for survey/installasi without prior schedule),
         // fallback to created_at as the visit date — consistent with ReportController logic.
         foreach ($replies as $reply) {
+            if ($reply['is_deleted']) continue;
+            
             // Cast semua ID ke integer (JSON decode bisa menghasilkan string)
             $rawIds = $reply['teknisi_ids'] ?? [];
             $replyTeknisiIds = collect(is_array($rawIds) ? $rawIds : [])
@@ -1550,6 +1680,173 @@ class TicketController extends Controller
         return view('content.report.pdf-rfo', [
             'ticket' => $data, 
             'logoBase64' => $logoBase64
+        ]);
+    }
+
+    public function updateReply(Request $request)
+    {
+        $validated = $request->validate([
+            'reply_id' => 'required|exists:ticket_replies,id',
+            'reply' => 'required|string|min:3',
+        ]);
+
+        $reply = TicketReply::findOrFail($validated['reply_id']);
+
+        // Check if user is the owner
+        if ($reply->user_id !== Auth::id()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You can only edit your own messages.'
+            ], 403);
+        }
+
+        $reply->update([
+            'reply' => $validated['reply']
+        ]);
+
+        // Log to timeline (use null/omit for update_status to avoid ENUM error and default badges)
+        TicketReply::create([
+            'ticket_id' => $reply->ticket_id,
+            'user_id' => Auth::id(),
+            'reply' => Auth::user()->name . ' mengedit komentar',
+            'update_status' => null,
+            'role' => 'admin'
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Update successful'
+        ]);
+    }
+
+    public function destroyReply(Request $request)
+    {
+        $validated = $request->validate([
+            'reply_id' => 'required|exists:ticket_replies,id',
+        ]);
+
+        $reply = TicketReply::findOrFail($validated['reply_id']);
+
+        // Check ownership
+        if ($reply->user_id !== Auth::id()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You can only delete your own messages.'
+            ], 403);
+        }
+
+        // Guard: Only allow deleting the LATEST active reply
+        $latestActiveReply = TicketReply::where('ticket_id', $reply->ticket_id)
+            ->where('is_deleted', false)
+            ->where('update_status', '!=', 'system') // Skip logs
+            ->where('role', '!=', 'system')
+            ->where('reply', 'not like', '%menghapus komentar%')
+            ->where('reply', 'not like', '%mengedit komentar%')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if ($latestActiveReply && $latestActiveReply->id !== $reply->id) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Hanya komentar terakhir yang dapat dihapus. Silakan hapus komentar setelahnya terlebih dahulu.'
+            ], 403);
+        }
+
+        $reply->update([
+            'is_deleted' => true
+        ]);        // Status & Field Reversion Logic: Re-derive ticket state from all valid replies
+        $ticket = Ticket::findOrFail($reply->ticket_id);
+        
+        // Define baseline defaults (matching initial ticket creation or reasonable defaults)
+        $targetStatus = 'open';
+        $targetPriority = 'medium'; 
+        $targetMetode = 'onsite';
+        $targetTgl = null;
+        $targetJam = null;
+        $targetHari = '-';
+        $targetTeknisiId = null;
+        $targetKendala = $ticket->kendala; // Fallback to current (or we could fetch initial if we had it)
+        $allTeknisiNames = [];
+
+        $statusMapping = [
+            'need_visit' => 'need visit',
+            'on_progress' => 'on progress',
+            'pending' => 'pending',
+            'remote_done' => 'selesai',
+            'done' => 'selesai',
+        ];
+
+        // Fetch all non-deleted replies in ascending order to "replay" the state
+        $validReplies = TicketReply::where('ticket_id', $ticket->id)
+            ->where('is_deleted', false)
+            ->orderBy('created_at', 'asc')
+            ->get();
+
+        foreach ($validReplies as $r) {
+            // Update status
+            if ($r->update_status && isset($statusMapping[$r->update_status])) {
+                $targetStatus = $statusMapping[$r->update_status];
+            }
+            
+            // Update priority & method
+            if ($r->priority) $targetPriority = $r->priority;
+            if ($r->metode_penanganan) $targetMetode = $r->metode_penanganan;
+            
+            // Update schedule
+            if ($r->tanggal_kunjungan) {
+                $targetTgl = $r->tanggal_kunjungan;
+                $targetJam = $r->jam_kunjungan;
+            }
+            
+            // Update technician
+            if ($r->teknisi_id) $targetTeknisiId = $r->teknisi_id;
+
+            // Update description (kendala) with latest reply
+            $isLog = $r->reply && (str_contains($r->reply, 'menghapus komentar') || str_contains($r->reply, 'mengedit komentar'));
+            if ($r->update_status !== 'system' && !$isLog) {
+                $targetKendala = $r->reply;
+            }
+
+            // Re-accumulate technician names for pic_teknisi
+            $rTeknisiIds = collect($r->teknisi_ids ?? [])->filter()->values();
+            if ($rTeknisiIds->isEmpty() && $r->teknisi_id) {
+                $rTeknisiIds = collect([(int)$r->teknisi_id]);
+            }
+            if ($rTeknisiIds->isNotEmpty()) {
+                $names = User::whereIn('id', $rTeknisiIds)->pluck('name')->toArray();
+                $allTeknisiNames = array_unique(array_merge($allTeknisiNames, $names));
+            }
+        }
+
+        // Apply reconstructed state to ticket
+        $updateData = [
+            'status' => $targetStatus,
+            'priority' => $targetPriority,
+            'metode_penanganan' => $targetMetode,
+            'teknisi_id' => $targetTeknisiId,
+            'pic_teknisi' => implode(', ', array_filter($allTeknisiNames)) ?: '',
+            'tanggal_kunjungan' => $targetTgl,
+            'jam' => $targetJam,
+            'kendala' => $targetKendala,
+        ];
+
+        $ticket->update($updateData);
+
+        // Always recalculate SLA after status change
+        $this->recalculateSla($ticket);
+
+        // Log to timeline with original message content
+        TicketReply::create([
+            'ticket_id' => $reply->ticket_id,
+            'user_id' => Auth::id(),
+            'reply' => Auth::user()->name . ' menghapus komentar: "' . $reply->reply . '"',
+            'update_status' => null,
+            'role' => 'admin'
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Reply deleted successfully'
         ]);
     }
 }

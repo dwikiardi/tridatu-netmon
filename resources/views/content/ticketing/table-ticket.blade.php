@@ -79,7 +79,6 @@
           <th>Hari</th>
           <th>Kendala</th>
           <th>Status</th>
-          <th>Action</th>
         </tr>
       </thead>
       <tbody class="table-border-bottom-0">
@@ -243,9 +242,10 @@
 
             <!-- Form untuk Pelanggan Baru -->
             <div id="survey_baru_fields">
-              <div class="mb-3">
+              <div class="mb-3 position-relative">
                 <label for="survey_nama_pelanggan" class="form-label">Nama Pelanggan <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="survey_nama_pelanggan" name="survey_nama" placeholder="Nama pelanggan baru">
+                <input type="text" class="form-control" id="survey_nama_pelanggan" name="survey_nama" placeholder="Nama pelanggan baru" autocomplete="off">
+                <div id="survey_nama_suggestions" class="name-suggestions-dropdown position-absolute w-100" style="display: none; max-height: 200px; overflow-y: auto;"></div>
               </div>
 
               <div class="mb-3">
@@ -302,9 +302,10 @@
 
             <!-- Form untuk Project -->
             <div id="survey_project_fields" style="display:none;">
-              <div class="mb-3">
+              <div class="mb-3 position-relative">
                 <label for="survey_project_nama" class="form-label">Nama Project <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="survey_project_nama" name="survey_project_nama" placeholder="Nama project">
+                <input type="text" class="form-control" id="survey_project_nama" name="survey_project_nama" placeholder="Nama project" autocomplete="off">
+                <div id="survey_project_nama_suggestions" class="name-suggestions-dropdown position-absolute w-100" style="display: none; max-height: 200px; overflow-y: auto;"></div>
               </div>
 
               <div class="mb-3">
@@ -526,6 +527,14 @@
     height: 36px;
   }
 
+  /* Fix Select2 dropdown position in modal */
+  .select2-container {
+    z-index: 2000 !important;
+  }
+  .select2-dropdown {
+    z-index: 2005 !important;
+  }
+
   /* Sticky Columns - Ticket No & Nama Customer */
   .sticky-col-1 {
     position: sticky !important;
@@ -590,6 +599,39 @@
   #floatingScrollbarContentTicket {
     height: 1px;
   }
+
+  /* Style for name suggestions dropdown (Autocomplete) */
+  .name-suggestions-dropdown {
+    background-color: #fff;
+    border: 1px solid #d9dee3;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.25rem 1rem rgba(161, 172, 184, 0.45);
+    z-index: 1060;
+    margin-top: 2px;
+  }
+  .name-suggestions-item {
+    padding: 0.6rem 0.85rem;
+    cursor: pointer;
+    border: none !important;
+    background-color: #fff;
+    display: block;
+    width: 100%;
+    text-align: left;
+    transition: all 0.1s ease;
+  }
+  .name-suggestions-item:hover {
+    background-color: #696cff !important;
+    color: #fff !important;
+  }
+  .name-suggestions-item:hover .text-dark,
+  .name-suggestions-item:hover .fw-bold {
+    color: #fff !important;
+  }
+  .name-suggestions-item:hover .badge {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+    color: #fff !important;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
 </style>
 @endsection
 
@@ -599,6 +641,60 @@
 $(document).ready(function() {
   let currentAction = 'add';
   let customersData = [];
+
+  // Handle suggestion searching for names
+  function handleNameSuggestions(inputId, suggestionId) {
+    let timeout = null;
+    $(`#${inputId}`).on('input', function() {
+      clearTimeout(timeout);
+      const query = $(this).val();
+      const $container = $(`#${suggestionId}`);
+
+      if (query.length < 2) {
+        $container.hide().empty();
+        return;
+      }
+
+      timeout = setTimeout(function() {
+        $.ajax({
+          url: '{{ route("search-names") }}',
+          data: { q: query },
+          success: function(data) {
+            $container.empty();
+            if (data.length > 0) {
+              data.forEach(function(item) {
+                const $item = $('<button type="button" class="name-suggestions-item py-2"></button>');
+                $item.html(`
+                  <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-dark fw-bold">${item.nama}</span>
+                    <span class="badge bg-label-secondary small" style="font-size: 0.7rem;">${item.source.toUpperCase()}</span>
+                  </div>
+                `);
+                $item.on('click', function() {
+                  $(`#${inputId}`).val(item.nama);
+                  $container.hide().empty();
+                });
+                $container.append($item);
+              });
+              $container.show();
+            } else {
+              $container.hide();
+            }
+          }
+        });
+      }, 300);
+    });
+
+    // Close suggestions on click outside
+    $(document).on('click', function(e) {
+      if (!$(e.target).closest(`#${inputId}, #${suggestionId}`).length) {
+        $(`#${suggestionId}`).hide();
+      }
+    });
+  }
+
+  handleNameSuggestions('survey_nama_pelanggan', 'survey_nama_suggestions');
+  handleNameSuggestions('survey_project_nama', 'survey_project_nama_suggestions');
 
   // Handle Created Today toggle
   $('#is_created_today').on('change', function() {
@@ -682,21 +778,21 @@ $(document).ready(function() {
         placeholder: 'Cari CID atau Nama Customer',
         allowClear: true,
         width: '100%',
-        dropdownParent: $('#modalAddTicket')
+        dropdownParent: $('#modalAddTicket .modal-body')
       });
 
       $('#survey_customer_id').select2({
         placeholder: 'Pilih Customer Existing',
         allowClear: true,
         width: '100%',
-        dropdownParent: $('#modalAddTicket')
+        dropdownParent: $('#modalAddTicket .modal-body')
       });
 
       $('#install_customer_terminate').select2({
         placeholder: 'Pilih Customer yang Terminate',
         allowClear: true,
         width: '100%',
-        dropdownParent: $('#modalAddTicket')
+        dropdownParent: $('#modalAddTicket .modal-body')
       });
     }
   });
@@ -742,7 +838,7 @@ $(document).ready(function() {
     placeholder: 'Pilih dari Survey Project',
     allowClear: true,
     width: '100%',
-    dropdownParent: $('#modalAddTicket')
+    dropdownParent: $('#modalAddTicket .modal-body')
   });
 
   // Load calon customer list for Installasi only
@@ -785,7 +881,7 @@ $(document).ready(function() {
     placeholder: 'Pilih Calon Customer dari Survey sebelumnya',
     allowClear: true,
     width: '100%',
-    dropdownParent: $('#modalAddTicket')
+    dropdownParent: $('#modalAddTicket .modal-body')
   });
 
   // Load POPs for installation forms
@@ -823,7 +919,7 @@ $(document).ready(function() {
     placeholder: 'Pilih atau ketik POP baru',
     allowClear: true,
     width: '100%',
-    dropdownParent: $('#modalAddTicket')
+    dropdownParent: $('#modalAddTicket .modal-body')
   });
 
   $('#install_terminate_pop').select2({
@@ -831,7 +927,7 @@ $(document).ready(function() {
     placeholder: 'Pilih atau ketik POP baru',
     allowClear: true,
     width: '100%',
-    dropdownParent: $('#modalAddTicket')
+    dropdownParent: $('#modalAddTicket .modal-body')
   });
 
   // Handle Installasi calon customer selection - auto-fill data
@@ -883,7 +979,7 @@ $(document).ready(function() {
     placeholder: 'Pilih Customer yang sudah di-survey',
     allowClear: true,
     width: '100%',
-    dropdownParent: $('#modalAddTicket')
+    dropdownParent: $('#modalAddTicket .modal-body')
   });
 
   // Handle Installasi penambahan customer selection - auto-fill data
@@ -1093,22 +1189,6 @@ $(document).ready(function() {
           };
           return '<span class="badge ' + (badges[data] || 'bg-secondary') + '">' + (data ? data.toUpperCase() : '-') + '</span>';
         }
-      },
-      {
-        data: 'id',
-        orderable: false,
-        searchable: false,
-        width: '100px',
-        render: function(data, type, row) {
-          return `
-            <button class="btn btn-sm btn-warning btn-edit" data-id="${data}" title="Edit">
-              <i class="bx bx-edit"></i>
-            </button>
-            <button class="btn btn-sm btn-danger btn-delete" data-id="${data}" title="Delete">
-              <i class="bx bx-trash"></i>
-            </button>
-          `;
-        }
       }
     ],
     order: [[0, 'desc']],
@@ -1282,42 +1362,54 @@ $(document).ready(function() {
 
     btn.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Saving...');
 
-    const formData = $('#formTicket').serialize();
-    const url = currentAction === 'add' ? '{{ url("ticketing/store") }}' : '{{ url("ticketing/update") }}';
-    const method = currentAction === 'add' ? 'POST' : 'PUT';
+    function performSave(force = false) {
+      const formData = $('#formTicket').serialize() + (force ? '&force_create=true' : '');
+      const url = currentAction === 'add' ? '{{ url("ticketing/store") }}' : '{{ url("ticketing/update") }}';
+      const method = currentAction === 'add' ? 'POST' : 'PUT';
 
-    $.ajax({
-      url: url,
-      type: method,
-      data: formData,
-      headers: {
-        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-      },
-      success: function(response) {
-        $('#modalAddTicket').modal('hide');
-        $('#formTicket')[0].reset();
-        $('#cid').val(null).trigger('change');
-        table.ajax.reload();
-        alert(response.message);
-      },
-      error: function(xhr) {
-        var msg = (xhr.responseJSON && xhr.responseJSON.message)
-          ? xhr.responseJSON.message
-          : (function(){
-              if (xhr.responseJSON && xhr.responseJSON.errors) {
-                var firstKey = Object.keys(xhr.responseJSON.errors)[0];
-                if (firstKey) {
-                  return xhr.responseJSON.errors[firstKey][0];
+      $.ajax({
+        url: url,
+        type: method,
+        data: formData,
+        headers: {
+          'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        },
+        success: function(response) {
+          $('#modalAddTicket').modal('hide');
+          $('#formTicket')[0].reset();
+          $('#cid').val(null).trigger('change');
+          table.ajax.reload();
+          alert(response.message);
+        },
+        error: function(xhr) {
+          // Check for duplication confirmation
+          if (xhr.status === 409 && xhr.responseJSON && xhr.responseJSON.status === 'confirm_duplicate') {
+            if (confirm(xhr.responseJSON.message)) {
+              performSave(true); // Retry with force_create=true
+              return;
+            }
+          }
+
+          var msg = (xhr.responseJSON && xhr.responseJSON.message)
+            ? xhr.responseJSON.message
+            : (function(){
+                if (xhr.responseJSON && xhr.responseJSON.errors) {
+                  var firstKey = Object.keys(xhr.responseJSON.errors)[0];
+                  if (firstKey) {
+                    return xhr.responseJSON.errors[firstKey][0];
+                  }
                 }
-              }
-              return 'Terjadi kesalahan saat menyimpan ticket';
-            })();
-        alert('Error: ' + msg);
-      },
-      complete: function() {
-        btn.prop('disabled', false).html('Save');
-      }
-    });
+                return 'Terjadi kesalahan saat menyimpan ticket';
+              })();
+          alert('Error: ' + msg);
+        },
+        complete: function() {
+          btn.prop('disabled', false).html('Save');
+        }
+      });
+    }
+
+    performSave();
   });
 
   // Delete button

@@ -6,7 +6,7 @@
 
 <?php
 // Generate ticket number: TDN-DDMMYY-HHMM-NO
-$tanggal = $ticket->tanggal_kunjungan ? $ticket->tanggal_kunjungan->format('dmY') : date('dmY');
+$tanggal = $ticket->tanggal_kunjungan ? \Carbon\Carbon::parse($ticket->tanggal_kunjungan)->format('dmY') : date('dmY');
 $jam = $ticket->jam ? date('Hi', strtotime($ticket->jam)) : date('Hi');
 $no = str_pad($ticket->id, 3, '0', STR_PAD_LEFT);
 $ticketNo = "TDN-{$tanggal}-{$jam}-{$no}";
@@ -26,6 +26,12 @@ $ticketNo = "TDN-{$tanggal}-{$jam}-{$no}";
   </div>
 
   <div class="d-flex gap-2">
+    <button type="button" class="btn btn-warning" id="btnEditTicket">
+      <i class="bx bx-edit me-1"></i> Edit
+    </button>
+    <button type="button" class="btn btn-danger" id="btnDeleteTicket">
+      <i class="bx bx-trash me-1"></i> Delete
+    </button>
     @if($ticket->jenis === 'maintenance')
     <!-- Show RFO Button (Always visible) -->
     <button type="button" class="btn btn-info" id="btnShowRfo">
@@ -50,142 +56,200 @@ $ticketNo = "TDN-{$tanggal}-{$jam}-{$no}";
         <h5 class="mb-0">Ticket Information</h5>
       </div>
       <div class="card-body">
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Ticket No</h6>
-            <p class="mb-0"><strong>{{ $ticketNo }}</strong></p>
+        <form id="editTicketForm" style="display: none;">
+          @csrf
+          <input type="hidden" name="id" value="{{ $ticket->id }}">
+          
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Status</label>
+              <select name="status" class="form-select">
+                <option value="open" {{ $ticket->status === 'open' ? 'selected' : '' }}>Open</option>
+                <option value="need visit" {{ $ticket->status === 'need visit' ? 'selected' : '' }}>Need Visit</option>
+                <option value="on progress" {{ $ticket->status === 'on progress' ? 'selected' : '' }}>On Progress</option>
+                <option value="pending" {{ $ticket->status === 'pending' ? 'selected' : '' }}>Pending</option>
+                <option value="selesai" {{ $ticket->status === 'selesai' ? 'selected' : '' }}>Selesai</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Priority</label>
+              <select name="priority" class="form-select">
+                <option value="low" {{ $ticket->priority === 'low' ? 'selected' : '' }}>Low</option>
+                <option value="medium" {{ $ticket->priority === 'medium' ? 'selected' : '' }}>Medium</option>
+                <option value="high" {{ $ticket->priority === 'high' ? 'selected' : '' }}>High</option>
+                <option value="urgent" {{ $ticket->priority === 'urgent' ? 'selected' : '' }}>Urgent</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Method</label>
+              <select name="metode_penanganan" class="form-select">
+                <option value="remote" {{ $ticket->metode_penanganan === 'remote' ? 'selected' : '' }}>Remote</option>
+                <option value="onsite" {{ $ticket->metode_penanganan === 'onsite' ? 'selected' : '' }}>Onsite</option>
+              </select>
+            </div>
           </div>
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Status</h6>
-            <p class="mb-0">
-              @php
-                $status = $ticket->status;
-                $statusLabel = $status === 'open'
-                  ? 'OPEN'
-                  : ($status === 'need visit'
-                    ? 'PERLU KUNJUNGAN'
-                    : ($status === 'on progress'
-                      ? 'ON PROGRESS'
-                      : ($status === 'pending'
-                        ? 'PENDING'
-                        : strtoupper($status))));
-                $statusColor = $status === 'open'
-                  ? 'primary'
-                  : ($status === 'need visit'
-                    ? 'warning'
-                    : ($status === 'on progress'
-                      ? 'info'
-                      : ($status === 'pending'
-                        ? 'secondary'
-                        : 'success')));
-              @endphp
-              <span id="ticketInfoStatusBadge" class="badge bg-{{ $statusColor }}">{{ strtoupper($statusLabel) }}</span>
-            </p>
-          </div>
-        </div>
 
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Customer (CID)</h6>
-            <p class="mb-0"><strong>{{ $ticket->cid ?? 'TDNSurvey' }}</strong></p>
+          <div class="d-flex justify-content-end gap-2 mt-4">
+            <button type="button" class="btn btn-secondary" id="btnCancelEdit">Cancel</button>
+            <button type="submit" class="btn btn-success" id="btnSaveTicket">Save Changes</button>
           </div>
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Customer Name</h6>
-            <p class="mb-0">
-              <strong>
-                {{ $ticket->customer ? $ticket->customer->nama : ($ticket->calonCustomer ? $ticket->calonCustomer->nama : '-') }}
-              </strong>
-            </p>
-          </div>
-        </div>
+        </form>
 
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Priority</h6>
-            <p class="mb-0">
-              <span class="badge bg-{{ $ticket->priority === 'urgent' ? 'danger' : ($ticket->priority === 'high' ? 'warning' : 'info') }}">
-                {{ ucfirst($ticket->priority) }}
-              </span>
-            </p>
+        <div id="viewTicketContent">
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Ticket No</h6>
+              <p class="mb-0"><strong>{{ $ticketNo }}</strong></p>
+            </div>
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Status</h6>
+              <p class="mb-0">
+                @php
+                  $status = $ticket->status;
+                  $statusLabel = $status === 'open'
+                    ? 'OPEN'
+                    : ($status === 'need visit'
+                      ? 'PERLU KUNJUNGAN'
+                      : ($status === 'on progress'
+                        ? 'ON PROGRESS'
+                        : ($status === 'pending'
+                          ? 'PENDING'
+                          : strtoupper($status))));
+                  $statusColor = $status === 'open'
+                    ? 'primary'
+                    : ($status === 'need visit'
+                      ? 'warning'
+                      : ($status === 'on progress'
+                        ? 'info'
+                        : ($status === 'pending'
+                          ? 'secondary'
+                          : 'success')));
+                @endphp
+                <span id="ticketInfoStatusBadge" class="badge bg-{{ $statusColor }}">{{ strtoupper($statusLabel) }}</span>
+              </p>
+            </div>
           </div>
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Type</h6>
-            <p class="mb-0"><strong>{{ ucfirst($ticket->jenis) }}</strong></p>
-          </div>
-        </div>
 
-        <div class="row mb-3">
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Method</h6>
-            <p class="mb-0"><strong>{{ ucfirst($ticket->metode_penanganan) }}</strong></p>
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Customer (CID)</h6>
+              <p class="mb-0">
+                <strong>
+                  @if($ticket->cid)
+                    {{ $ticket->cid }}
+                  @elseif($ticket->calon_customer_id)
+                    Survey-{{ str_pad($ticket->calon_customer_id, 3, '0', STR_PAD_LEFT) }}
+                  @else
+                    -
+                  @endif
+                </strong>
+              </p>
+            </div>
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Customer Name</h6>
+              <p class="mb-0">
+                <strong>
+                  {{ $ticket->customer ? $ticket->customer->nama : ($ticket->calonCustomer ? $ticket->calonCustomer->nama : '-') }}
+                </strong>
+              </p>
+            </div>
           </div>
-          <div class="col-md-6">
-            <h6 class="text-muted mb-2">Created By</h6>
-            <p class="mb-0">
-              <strong>{{ $ticket->creator ? $ticket->creator->name : 'Admin' }}</strong>
-              <small class="text-muted">({{ $ticket->created_by_role ?? 'admin' }})</small>
-            </p>
-          </div>
-        </div>
 
-        @if(in_array($ticket->status, ['selesai']))
-        <div class="row mb-3">
-          @if($ticket->jenis === 'maintenance')
-          <div class="col-md-4">
-            <h6 class="text-muted mb-2">MTTR Response</h6>
-            <p class="mb-0"><strong>{{ $ticket->sla_remote_minutes !== null ? ($ticket->sla_remote_formatted ?: '0m') : '-' }}</strong></p>
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Priority</h6>
+              <p class="mb-0">
+                <span class="badge bg-{{ $ticket->priority === 'urgent' ? 'danger' : ($ticket->priority === 'high' ? 'warning' : 'info') }}">
+                  {{ ucfirst($ticket->priority) }}
+                </span>
+              </p>
+            </div>
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Type</h6>
+              <p class="mb-0">
+                <strong>
+                  {{ ucfirst($ticket->jenis) }}
+                  @if($ticket->jenis === 'survey' && $ticket->calonCustomer)
+                    ({{ $ticket->calonCustomer->tipe_survey === 'project' ? 'Project' : 'New Customer' }})
+                  @endif
+                </strong>
+              </p>
+            </div>
           </div>
-          <div class="col-md-4">
-            <h6 class="text-muted mb-2">MTTR Resolve</h6>
-            <p class="mb-0"><strong>{{ $ticket->sla_onsite_minutes !== null ? ($ticket->sla_onsite_formatted ?: '0m') : '-' }}</strong></p>
+
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Method</h6>
+              <p class="mb-0"><strong>{{ ucfirst($ticket->metode_penanganan) }}</strong></p>
+            </div>
+            <div class="col-md-6">
+              <h6 class="text-muted mb-2">Created By</h6>
+              <p class="mb-0">
+                <strong>{{ $ticket->creator ? $ticket->creator->name : 'Admin' }}</strong>
+                <small class="text-muted">({{ $ticket->created_by_role ?? 'admin' }})</small>
+              </p>
+            </div>
           </div>
-          <div class="col-md-4">
-            <h6 class="text-muted mb-2">Downtime</h6>
-            <p class="mb-0"><strong>{{ $ticket->sla_total_minutes !== null ? ($ticket->sla_total_formatted ?: '0m') : '-' }}</strong></p>
+
+          @if(in_array($ticket->status, ['selesai']))
+          <div class="row mb-3">
+            @if($ticket->jenis === 'maintenance')
+            <div class="col-md-4">
+              <h6 class="text-muted mb-2">MTTR Response</h6>
+              <p class="mb-0"><strong>{{ $ticket->sla_remote_minutes !== null ? ($ticket->sla_remote_formatted ?: '0m') : '-' }}</strong></p>
+            </div>
+            <div class="col-md-4">
+              <h6 class="text-muted mb-2">MTTR Resolve</h6>
+              <p class="mb-0"><strong>{{ $ticket->sla_onsite_minutes !== null ? ($ticket->sla_onsite_formatted ?: '0m') : '-' }}</strong></p>
+            </div>
+            <div class="col-md-4">
+              <h6 class="text-muted mb-2">Downtime</h6>
+              <p class="mb-0"><strong>{{ $ticket->sla_total_minutes !== null ? ($ticket->sla_total_formatted ?: '0m') : '-' }}</strong></p>
+            </div>
+            @else
+            <div class="col-md-12">
+              <h6 class="text-muted mb-2">MTTR Resolve</h6>
+              <p class="mb-0"><strong>{{ $ticket->sla_onsite_minutes !== null ? ($ticket->sla_onsite_formatted ?: '0m') : '-' }}</strong></p>
+            </div>
+            @endif
           </div>
-          @else
-          <div class="col-md-12">
-            <h6 class="text-muted mb-2">MTTR Resolve</h6>
-            <p class="mb-0"><strong>{{ $ticket->sla_onsite_minutes !== null ? ($ticket->sla_onsite_formatted ?: '0m') : '-' }}</strong></p>
+
+          <hr>
+          @endif
+
+          <div class="row mb-3">
+            <div class="col-12">
+              <h6 class="text-muted mb-2">
+                @if($ticket->jenis === 'maintenance')
+                  Problem / Kendala
+                @elseif($ticket->jenis === 'survey')
+                  Hasil Survey / Update Terakhir
+                @else
+                  Detail Update Terakhir
+                @endif
+              </h6>
+              <p class="mb-0">{{ $ticket->kendala }}</p>
+            </div>
+          </div>
+
+          @if($ticket->solusi && $ticket->jenis === 'maintenance')
+          <div class="row mb-3">
+            <div class="col-12">
+              <h6 class="text-muted mb-2">Solution / Solusi</h6>
+              <p class="mb-0">{{ $ticket->solusi }}</p>
+            </div>
+          </div>
+          @endif
+
+          @if($ticket->hasil)
+          <div class="row mb-3">
+            <div class="col-12">
+              <h6 class="text-muted mb-2">Result / Hasil</h6>
+              <p class="mb-0">{{ $ticket->hasil }}</p>
+            </div>
           </div>
           @endif
         </div>
-
-        <hr>
-        @endif
-
-        <div class="row mb-3">
-          <div class="col-12">
-            <h6 class="text-muted mb-2">
-              @if($ticket->jenis === 'maintenance')
-                Problem / Kendala
-              @elseif($ticket->jenis === 'survey')
-                Hasil Survey / Update Terakhir
-              @else
-                Detail Update Terakhir
-              @endif
-            </h6>
-            <p class="mb-0">{{ $ticket->kendala }}</p>
-          </div>
-        </div>
-
-        @if($ticket->solusi && $ticket->jenis === 'maintenance')
-        <div class="row mb-3">
-          <div class="col-12">
-            <h6 class="text-muted mb-2">Solution / Solusi</h6>
-            <p class="mb-0">{{ $ticket->solusi }}</p>
-          </div>
-        </div>
-        @endif
-
-        @if($ticket->hasil)
-        <div class="row mb-3">
-          <div class="col-12">
-            <h6 class="text-muted mb-2">Result / Hasil</h6>
-            <p class="mb-0">{{ $ticket->hasil }}</p>
-          </div>
-        </div>
-        @endif
       </div>
     </div>
 
@@ -874,8 +938,15 @@ $(document).ready(function() {
   loadReplies();
   loadTimeline();
 
-  // Auto-load replies every 3 seconds
-  setInterval(loadReplies, 3000);
+  // Auto-refresh logic (pause during edit)
+  let isEditingReply = false;
+  
+  setInterval(function() {
+    if (!isEditingReply) {
+      loadReplies();
+    }
+  }, 3000);
+  
   setInterval(loadTimeline, 5000);
 
   // Handle form submission - modal button
@@ -1165,8 +1236,41 @@ $(document).ready(function() {
           );
           $('#replyCount').text('0 updates');
         } else {
+          // Identify the last active (not deleted or log) reply to only allow deleting the latest one
+          let lastActiveIndex = -1;
+          const activeReplies = replies.map((r, i) => {
+            const isLog = r.reply.includes('menghapus komentar') || 
+                         r.reply.includes('mengedit komentar') || 
+                         r.update_status === 'system' || 
+                         r.user_role === 'system' ||
+                         r.user_id === 1;
+            return { ...r, isActualChat: !r.is_deleted && !isLog, originalIndex: i };
+          });
+          
+          for (let i = activeReplies.length - 1; i >= 0; i--) {
+            if (activeReplies[i].isActualChat) {
+              lastActiveIndex = activeReplies[i].originalIndex;
+              break;
+            }
+          }
+
           let html = '';
+          let actualChatCount = 0;
+
           replies.forEach(function(reply, index) {
+            // Use same logic for skipping
+            const isLogMessage = reply.reply.includes('menghapus komentar') || 
+                                reply.reply.includes('mengedit komentar') || 
+                                reply.update_status === 'system' || 
+                                reply.user_role === 'system' ||
+                                reply.user_id === 1;
+                                
+            if (reply.is_deleted || isLogMessage) {
+              return;
+            }
+            
+            actualChatCount++;
+
             // Define status badge
             let statusBadge = '';
             const statusMap = {
@@ -1190,8 +1294,28 @@ $(document).ready(function() {
               scheduleInfo = `<div class="mt-2"><small class="text-primary"><i class="bx bx-calendar me-1"></i><strong>Jadwal Kunjungan:</strong> ${formattedDate} pukul ${reply.jam_kunjungan}</small></div>`;
             }
 
+            // Edit/Delete button logic
+            let actionBtns = '';
+            if (reply.user_id === {{ Auth::id() }}) {
+              // Edit always allowed
+              actionBtns += `
+                <button type="button" class="btn btn-sm btn-icon btn-outline-warning btn-edit-reply me-1" data-id="${reply.id}" data-reply="${reply.reply}" title="Edit Message">
+                  <i class="bx bx-edit-alt"></i>
+                </button>
+              `;
+              
+              // DELETE only allowed if it's the LATEST one (Last-In-First-Out)
+              if (index === lastActiveIndex) {
+                 actionBtns += `
+                  <button type="button" class="btn btn-sm btn-icon btn-outline-danger btn-delete-reply" data-id="${reply.id}" title="Delete Message">
+                    <i class="bx bx-trash"></i>
+                  </button>
+                `;
+              }
+            }
+
             html += `
-              <div class="mb-3 pb-3 ${index < replies.length - 1 ? 'border-bottom' : ''}">
+              <div class="mb-3 pb-3 ${index < replies.length - 1 ? 'border-bottom' : ''}" id="reply-container-${reply.id}">
                 <div class="d-flex justify-content-between align-items-start">
                   <div>
                     <h6 class="mb-1">
@@ -1203,14 +1327,19 @@ $(document).ready(function() {
                     </h6>
                     <small class="text-muted">${reply.created_at_diff}</small>
                   </div>
+                  <div class="reply-actions">
+                    ${actionBtns}
+                  </div>
                 </div>
-                <p class="mt-2 mb-0">${reply.reply}</p>
+                <div class="reply-content-wrapper mt-2">
+                  <p class="mb-0 reply-text">${reply.reply}</p>
+                </div>
                 ${scheduleInfo}
               </div>
             `;
           });
-          $('#repliesContainer').html(html);
-          $('#replyCount').text(replies.length + ' ' + (replies.length === 1 ? 'update' : 'updates'));
+          $('#repliesContainer').html(html || '<div class="text-center text-muted py-4"><small>No active updates...</small></div>');
+          $('#replyCount').text(actualChatCount + ' ' + (actualChatCount === 1 ? 'update' : 'updates'));
         }
       }
     });
@@ -1247,6 +1376,8 @@ $(document).ready(function() {
             statusLabel = 'Selesai Remote';
           } else if (reply.update_status === 'done') {
             statusLabel = 'Selesai';
+          } else if (reply.update_status === 'system' || reply.update_status === null) {
+            statusLabel = 'Log';
           } else {
             statusLabel = reply.update_status || '-';
           }
@@ -1258,7 +1389,8 @@ $(document).ready(function() {
             'On Check': 'info',
             'Pending': 'secondary',
             'Selesai Remote': 'success',
-            'Selesai': 'success'
+            'Selesai': 'success',
+            'Log': 'dark'
           };
           const badgeColor = badgeColorMap[statusLabel] || 'secondary';
 
@@ -1502,7 +1634,7 @@ $(document).ready(function() {
   }
 
   loadTeknisi();
-  setInterval(loadTeknisi, 5000);
+  setInterval(loadTeknisi, 10000); // 10s refresh for teknisi list
 
   // RFO Button Handlers
   $('#btnEditRfo').on('click', function() {
@@ -1588,6 +1720,153 @@ $(document).ready(function() {
           btn.prop('disabled', false).html('<i class="bx bx-save"></i> Save Changes');
        }
     });
+  });
+
+  // Ticket Edit Logic
+  $('#btnEditTicket').on('click', function() {
+    $('#viewTicketContent').hide();
+    $('#editTicketForm').show();
+    $(this).hide();
+    $('#btnDeleteTicket').hide();
+  });
+
+  $('#btnCancelEdit').on('click', function() {
+    $('#editTicketForm').hide();
+    $('#viewTicketContent').show();
+    $('#btnEditTicket').show();
+    $('#btnDeleteTicket').show();
+  });
+
+  $('#editTicketForm').on('submit', function(e) {
+    e.preventDefault();
+    const btn = $('#btnSaveTicket');
+    btn.prop('disabled', true).html('<i class="bx bx-loader-alt bx-spin"></i> Saving...');
+
+    $.ajax({
+      url: '{{ route("update-ticketing") }}',
+      type: 'POST',
+      data: $(this).serialize() + '&_method=PUT',
+      success: function(res) {
+        alert('Ticket updated successfully');
+        location.reload();
+      },
+      error: function(xhr) {
+        alert('Failed to update ticket: ' + (xhr.responseJSON?.message || 'Error occurred'));
+        btn.prop('disabled', false).html('Save Changes');
+      }
+    });
+  });
+
+  // Ticket Delete Logic
+  $('#btnDeleteTicket').on('click', function() {
+    if (confirm('Are you sure you want to delete this ticket? This action cannot be undone.')) {
+      $.ajax({
+        url: '{{ route("delete-ticketing") }}',
+        type: 'POST',
+        data: {
+          _token: '{{ csrf_token() }}',
+          _method: 'DELETE',
+          id: ticketId
+        },
+        success: function(res) {
+          alert('Ticket deleted successfully');
+          window.location.href = '{{ route("view-ticketing") }}';
+        },
+        error: function(xhr) {
+          alert('Failed to delete ticket: ' + (xhr.responseJSON?.message || 'Error occurred'));
+        }
+      });
+    }
+  });
+
+  // Reply Edit Logic
+  $(document).on('click', '.btn-edit-reply', function() {
+    isEditingReply = true;
+    const id = $(this).data('id');
+    const oldReply = $(this).data('reply');
+    const container = $(`#reply-container-${id} .reply-content-wrapper`);
+
+    // Hide other edit forms if any? No, let user edit multiple if they want, but better to keep it clean.
+    
+    const editHtml = `
+      <div class="edit-reply-form mt-2">
+        <textarea class="form-control mb-2 edit-reply-textarea" rows="2">${oldReply}</textarea>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-success btn-save-reply" data-id="${id}">Save</button>
+          <button class="btn btn-sm btn-secondary btn-cancel-edit-reply" data-id="${id}" data-old="${oldReply}">Cancel</button>
+        </div>
+      </div>
+    `;
+    
+    container.find('.reply-text').hide();
+    container.append(editHtml);
+    $(this).hide();
+  });
+
+  $(document).on('click', '.btn-cancel-edit-reply', function() {
+    isEditingReply = false;
+    const id = $(this).data('id');
+    const container = $(`#reply-container-${id} .reply-content-wrapper`);
+    container.find('.reply-text').show();
+    container.find('.edit-reply-form').remove();
+    $(`#reply-container-${id} .btn-edit-reply`).show();
+  });
+
+  $(document).on('click', '.btn-save-reply', function() {
+    const id = $(this).data('id');
+    const newReply = $(`#reply-container-${id} .edit-reply-textarea`).val().trim();
+    const btn = $(this);
+
+    if (newReply.length < 3) {
+      alert('Message must be at least 3 characters');
+      return;
+    }
+
+    btn.prop('disabled', true).text('Saving...');
+
+    $.ajax({
+      url: '{{ route("update-ticket-reply") }}',
+      type: 'POST',
+      data: {
+        _token: '{{ csrf_token() }}',
+        _method: 'PUT',
+        reply_id: id,
+        reply: newReply
+      },
+      success: function(res) {
+        isEditingReply = false;
+        $(`#reply-container-${id} .reply-text`).text(newReply).show();
+        $(`#reply-container-${id} .edit-reply-form`).remove();
+        $(`#reply-container-${id} .btn-edit-reply`).data('reply', newReply).show();
+      },
+      error: function(xhr) {
+        alert('Failed to update message: ' + (xhr.responseJSON?.message || 'Error occurred'));
+        btn.prop('disabled', false).text('Save');
+      }
+    });
+  });
+
+  // Reply Delete Logic
+  $(document).on('click', '.btn-delete-reply', function() {
+    const id = $(this).data('id');
+    if (confirm('Are you sure you want to delete this message? The action will be logged in history.')) {
+      $.ajax({
+        url: '{{ route("delete-ticket-reply") }}',
+        type: 'POST',
+        data: {
+          _token: '{{ csrf_token() }}',
+          _method: 'DELETE',
+          reply_id: id
+        },
+        success: function(res) {
+          loadReplies();
+          loadTimeline();
+        },
+        error: function(xhr) {
+          alert('Failed to delete message: ' + (xhr.responseJSON?.message || 'Error occurred'));
+        }
+      });
+    }
   });
 });
 </script>

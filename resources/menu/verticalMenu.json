@@ -20,6 +20,12 @@
       "slug": "view-customer"
     },
     {
+      "url": "datalead/view",
+      "name": "Data Leads",
+      "icon": "menu-icon bx bx-user-plus",
+      "slug": "view-lead"
+    },
+    {
       "url": "ticketing/view",
       "name": "Data Ticketing",
       "icon": "menu-icon bx bx-receipt",

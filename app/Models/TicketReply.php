@@ -20,10 +20,12 @@ class TicketReply extends Model
         'jam_kunjungan',
         'teknisi_id',
         'teknisi_ids',
+        'is_deleted',
     ];
 
     protected $casts = [
         'teknisi_ids' => 'array',
+        'is_deleted' => 'boolean',
     ];
 
     public function ticket()
